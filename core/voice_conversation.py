@@ -1,4 +1,5 @@
 import asyncio
+import re
 
 from google.genai import types
 
@@ -7,7 +8,11 @@ from core.tool_router import ToolRouter
 from voice.audio_input import MicrophoneInput
 from voice.audio_output import AudioOutput
 
-from config.settings import INPUT_SAMPLE_RATE
+from config.settings import (
+    INPUT_SAMPLE_RATE,
+    set_voice_preference,
+    get_voice_gender,
+)
 
 from memory.conversation_history import ConversationHistory
 from memory.memory_extractor import MemoryExtractor
@@ -16,7 +21,7 @@ from memory.extraction_queue import ExtractionQueue
 
 class VoiceConversation:
 
-    def __init__(self, ai=None, on_status=None, on_message=None):
+    def __init__(self, ai=None, on_status=None, on_message=None, on_voice_changed=None):
 
         self.ai = ai if ai else GeminiLive()
         self.tool_router = ToolRouter()
@@ -26,6 +31,7 @@ class VoiceConversation:
 
         self.on_status = on_status
         self.on_message = on_message
+        self.on_voice_changed = on_voice_changed
 
         self.history = ConversationHistory()
 
@@ -36,7 +42,7 @@ class VoiceConversation:
         self.extraction_queue = ExtractionQueue()
 
         self.stop_sending = asyncio.Event()
-        self.playback_queue = asyncio.Queue()
+        self.playback_queue = asyncio.Queue(maxsize=50)
 
         self.user_transcript_buffer = ""
         self.ai_transcript_buffer = ""
@@ -394,15 +400,72 @@ class VoiceConversation:
                                 "Listening to your voice..."
                             )
 
-                            normalized_text = (
+                            normalized_text = re.sub(
+                                r"[^a-z\s]",
+                                " ",
                                 self.user_transcript_buffer.lower()
-                                .replace(".", " ")
-                                .replace(",", " ")
-                                .replace("!", " ")
-                                .replace("?", " ")
+                            )
+                            normalized_text = " ".join(
+                                normalized_text.split()
                             )
 
                             words = normalized_text.split()
+
+                            # Spoken voice switching. Accept natural variants
+                            # such as "switch voice to female", "switch
+                            # your voice to female", and "use a female voice".
+                            # Gemini Live applies voice selection per session,
+                            # so we save the choice and end this session cleanly.
+                            requested_voice = None
+                            voice_command_patterns = {
+                                "female": (
+                                    r"\b(?:switch|change|set|make|use|choose|select)\b"
+                                    r".{0,40}\bfemale\b",
+                                    r"\b(?:i want|id like|give me|please use)\b"
+                                    r".{0,30}\bfemale\b",
+                                    r"\bfemale\s+voice\s+(?:please|now|instead)\b",
+                                ),
+                                "male": (
+                                    r"\b(?:switch|change|set|make|use|choose|select)\b"
+                                    r".{0,40}\bmale\b",
+                                    r"\b(?:i want|id like|give me|please use)\b"
+                                    r".{0,30}\bmale\b",
+                                    r"\bmale\s+voice\s+(?:please|now|instead)\b",
+                                ),
+                            }
+
+                            for gender, patterns in voice_command_patterns.items():
+                                if any(
+                                    re.search(pattern, normalized_text)
+                                    for pattern in patterns
+                                ):
+                                    requested_voice = gender
+                                    break
+
+                            if requested_voice:
+                                voice_name = set_voice_preference(
+                                    requested_voice
+                                )
+
+                                gender = get_voice_gender(voice_name)
+
+                                print(
+                                    f"\\nZORIN: Switching to {gender} voice."
+                                )
+
+                                self.flush_transcripts()
+
+                                if self.on_voice_changed:
+                                    self.on_voice_changed(gender)
+
+                                self.update_status(
+                                    "connecting",
+                                    f"Switching to {gender} voice. "
+                                    "Returning to standby..."
+                                )
+
+                                self.stop_sending.set()
+                                break
 
                             if (
                                 "goodbye" in words
@@ -465,8 +528,7 @@ class VoiceConversation:
                             "listening",
                             "I'm listening..."
                         )
-
-                    # AI AUDIO
+                                         # AI AUDIO
 
                     if content.model_turn:
 
@@ -477,6 +539,15 @@ class VoiceConversation:
                                 and part.inline_data.data
                             ):
 
+                                # Prevent old audio from piling up.
+                                if self.playback_queue.full():
+                                    try:
+                                        self.playback_queue.get_nowait()
+                                        self.playback_queue.task_done()
+
+                                    except asyncio.QueueEmpty:
+                                        pass
+
                                 self.playback_queue.put_nowait(
                                     part.inline_data.data
                                 )
@@ -485,8 +556,7 @@ class VoiceConversation:
                                     "speaking",
                                     "ZORIN is speaking..."
                                 )
-
-                    # TURN COMPLETE
+                                        # TURN COMPLETE
 
                     if content.turn_complete:
 

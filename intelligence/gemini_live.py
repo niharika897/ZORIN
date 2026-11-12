@@ -1,15 +1,19 @@
-﻿import asyncio
+import asyncio
 
 from google import genai
 from google.genai import types
 
-from config.settings import GEMINI_API_KEY, GEMINI_MODEL
+from config.settings import (
+    GEMINI_API_KEY,
+    GEMINI_MODEL,
+    get_voice_preference,
+)
 from voice.audio_output import AudioOutput
 
 
 class GeminiLive:
 
-    def __init__(self, memory_context=None):
+    def __init__(self, memory_context=None, voice_name=None):
 
         self.client = genai.Client(
             api_key=GEMINI_API_KEY,
@@ -19,6 +23,7 @@ class GeminiLive:
         )
 
         self.model = GEMINI_MODEL
+        self.voice_name = voice_name or get_voice_preference()
 
         self.session = None
         self.session_context = None
@@ -187,6 +192,55 @@ class GeminiLive:
                                 "open_after_create"
                             ]
                         }
+                    ),
+
+                    # ----------------------------------
+                    # SAVE MEMORY TO CENTRAL BRAIN
+                    # ----------------------------------
+
+                    types.FunctionDeclaration(
+                        name="save_memory",
+
+                        description=(
+                            "Save an important fact, preference, or detail "
+                            "to ZORIN's central persistent memory across all devices. "
+                            "Use this whenever the user asks to remember something, "
+                            "save a preference, or note personal information (e.g. "
+                            "'Remember that my favourite colour is blue', "
+                            "'Remember my dog's name is Max', 'Remember that I am a software engineer')."
+                        ),
+
+                        parameters={
+                            "type": "OBJECT",
+
+                            "properties": {
+
+                                "content": {
+                                    "type": "STRING",
+                                    "description": (
+                                        "The exact fact, detail, or preference to remember."
+                                    )
+                                },
+
+                                "category": {
+                                    "type": "STRING",
+                                    "description": (
+                                        "Category: preference, personal, project, or general."
+                                    )
+                                },
+
+                                "is_core": {
+                                    "type": "BOOLEAN",
+                                    "description": (
+                                        "True if user asks to save permanently or as core memory."
+                                    )
+                                }
+                            },
+
+                            "required": [
+                                "content"
+                            ]
+                        }
                     )
                 ]
             )
@@ -209,9 +263,54 @@ class GeminiLive:
             "Understand the user's speech and respond in English "
             "unless another language is explicitly requested. "
 
-            "Speak clearly and naturally. "
+            "Speak clearly and naturally, using language that sounds "
+            "comfortable when spoken aloud. "
 
             "Keep responses concise unless more detail is needed. "
+            "For simple questions, answer directly in one or two sentences. "
+            "For complex questions, organize the explanation into clear "
+            "steps without sounding like you are reading an essay. "
+
+            "\\n\\nCONVERSATION QUALITY RULES:\\n"
+
+            "1. Treat the conversation as continuous. Use the messages "
+            "already exchanged in this live session to understand follow-up "
+            "questions. "
+
+            "2. Resolve short follow-ups such as 'why?', 'how?', 'what about "
+            "that?', 'tell me more', and 'do it' using the most relevant "
+            "recent context. Do not ask the user to repeat information "
+            "that is already clear from the conversation. "
+
+            "3. If a pronoun or reference could reasonably mean two "
+            "different things, ask one brief clarification instead of "
+            "guessing. "
+
+            "4. Acknowledge what the user actually said before answering "
+            "when acknowledgement helps the flow. Do not repeat their "
+            "whole question unnecessarily. "
+
+            "5. Sound warm, attentive, and natural. Vary sentence openings "
+            "and avoid repetitive phrases such as 'How can I help you today?' "
+            "after every turn. "
+
+            "6. Do not narrate internal reasoning, hidden processes, or "
+            "implementation details unless the user asks. Give the useful "
+            "answer, not a description of how you are thinking. "
+
+            "7. When the user changes topic, follow the new topic naturally. "
+            "Do not force the previous topic into the answer. "
+
+            "8. For spoken replies, avoid unnecessary markdown, long lists, "
+            "or decorative symbols. Use a list only when it makes the answer "
+            "easier to follow. "
+
+            "9. If you do not know something or lack current information, "
+            "say so clearly. Never invent facts, actions, or memories. "
+
+            "10. Do not claim to have completed a device action until the "
+            "appropriate tool reports success. After a successful action, "
+            "confirm it briefly. "
 
             "Use relevant saved memories to personalize responses. "
 
@@ -266,6 +365,11 @@ class GeminiLive:
             "7. Never claim a website was created until "
             "the tool confirms success. "
 
+            "\n\nMEMORY RULES:\n"
+            "1. When the user asks you to remember or save information (e.g. 'Remember that my favourite colour is blue', 'Remember my dog is Max', 'Remember that I live in London'), immediately invoke the save_memory tool.\n"
+            "2. Never claim you have remembered or saved something until save_memory confirms success.\n"
+            "3. Answer questions about the user's preferences, background, and projects using the RELEVANT SAVED MEMORIES below.\n"
+
             "\n\nGENERAL RULES:\n"
 
             "1. Execute requested actions without unnecessary questions. "
@@ -295,7 +399,10 @@ class GeminiLive:
     # CONNECT TO GEMINI LIVE
     # ==================================================
 
-    async def connect(self, voice_name="Puck"):
+    async def connect(self, voice_name=None):
+
+        if voice_name:
+            self.voice_name = voice_name
 
         async with self._lifecycle_lock:
 
@@ -318,6 +425,13 @@ class GeminiLive:
             print(
                 "\nConnecting ZORIN to Gemini Live..."
             )
+            voice_gender = (
+                "FEMALE" if self.voice_name == "Aoede" else "MALE"
+            )
+            print(
+                f"ZORIN: Requested output voice: {voice_gender} "
+                f"({self.voice_name})."
+            )
 
             context = None
 
@@ -330,7 +444,7 @@ class GeminiLive:
                     "speech_config": {
                         "voice_config": {
                             "prebuilt_voice_config": {
-                                "voice_name": voice_name
+                                "voice_name": self.voice_name
                             }
                         }
                     },

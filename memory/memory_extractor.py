@@ -17,8 +17,11 @@ class MemoryExtractor:
             api_key=GEMINI_API_KEY
         )
 
-        # Preserve the existing extraction model.
-        self.model = "gemini-3.8-flash"
+        self.models = [
+            "gemini-3.1-flash-lite",
+            "gemini-3.8-flash"
+        ]
+        self.model = self.models[0]
 
     # --------------------------------------------------
     # EXTRACT MEMORIES
@@ -72,7 +75,8 @@ CONVERSATION:
 {conversation}
 """
 
-        for attempt in range(3):
+        for attempt in range(len(self.models)):
+            current_model = self.models[attempt]
 
             try:
 
@@ -80,7 +84,7 @@ CONVERSATION:
 
                     self.client.aio.models.generate_content(
 
-                        model=self.model,
+                        model=current_model,
 
                         contents=prompt,
 

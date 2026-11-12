@@ -20,6 +20,7 @@ from intelligence.gemini_live import GeminiLive
 from memory.memory_manager import MemoryManager
 from memory.queue_worker import MemoryQueueWorker
 from backend.client import register_current_device
+from config.settings import get_voice_preference
 
 
 # =========================================================
@@ -61,6 +62,7 @@ class ZorinWorker(QThread):
     status_changed = Signal(str, str)
     message_received = Signal(str, str)
     error_occurred = Signal(str)
+    voice_changed = Signal(str)
 
     def __init__(self):
 
@@ -245,7 +247,8 @@ class ZorinWorker(QThread):
             # ---------------------------------------------
 
             ai = GeminiLive(
-                memory_context=memory_context
+                memory_context=memory_context,
+                voice_name=get_voice_preference()
             )
 
             connection_task = asyncio.create_task(
@@ -305,6 +308,34 @@ class ZorinWorker(QThread):
                 if self.stop_requested.is_set():
                     break
 
+                # Apply any voice preference changed while ZORIN
+                # was waiting for the wake word.
+                selected_voice = get_voice_preference()
+
+                if ai and ai.voice_name != selected_voice:
+                    await ai.disconnect()
+                    ai = GeminiLive(
+                        memory_context=memory_context,
+                        voice_name=selected_voice
+                    )
+                    connection_task = asyncio.create_task(
+                        ai.connect(),
+                        name="zorin-gemini-voice-connect"
+                    )
+                    try:
+                        await connection_task
+                    except Exception as error:
+                        print(
+                            "Voice-change connection error:",
+                            repr(error)
+                        )
+                    connection_task = None
+
+                # Refresh central memory context from central backend/database
+                latest_memory_context = self.load_memory_context(memory_manager)
+                if ai:
+                    ai.memory_context = latest_memory_context
+
                 # -----------------------------------------
                 # START CONVERSATION
                 # -----------------------------------------
@@ -312,7 +343,8 @@ class ZorinWorker(QThread):
                 conversation = VoiceConversation(
                     ai=ai,
                     on_status=self.status_changed.emit,
-                    on_message=self.message_received.emit
+                    on_message=self.message_received.emit,
+                    on_voice_changed=self.voice_changed.emit
                 )
 
                 await conversation.start()
@@ -338,7 +370,8 @@ class ZorinWorker(QThread):
                 # -----------------------------------------
 
                 ai = GeminiLive(
-                    memory_context=memory_context
+                    memory_context=memory_context,
+                    voice_name=get_voice_preference()
                 )
 
                 connection_task = asyncio.create_task(
@@ -533,6 +566,10 @@ class ZorinController:
 
         self.worker.message_received.connect(
             self.window.add_message
+        )
+
+        self.worker.voice_changed.connect(
+            self.window.set_voice_selection
         )
 
         self.worker.error_occurred.connect(

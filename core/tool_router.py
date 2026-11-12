@@ -39,10 +39,36 @@ class ToolRouter:
                 open_after_create=kwargs.get("open_after_create", True)
             )
 
+        if action == "save_memory":
+            return self.save_memory(
+                content=kwargs.get("content", ""),
+                category=kwargs.get("category", "general"),
+                importance=kwargs.get("importance", 2),
+                is_core=kwargs.get("is_core", False)
+            )
+
         return {
             "success": False,
             "message": f"Unknown action: {action}"
         }
+
+    def save_memory(self, content, category="general", importance=2, is_core=False):
+        from memory.memory_manager import MemoryManager
+        mgr = MemoryManager()
+        if not content or not str(content).strip():
+            return {"success": False, "message": "Memory content cannot be empty."}
+        if is_core:
+            ok = mgr.remember_core(content=content, category=category, importance=importance)
+        else:
+            ok = mgr.remember(content=content, category=category, importance=importance)
+        if ok:
+            return {
+                "success": True,
+                "message": f"Successfully remembered: {content}",
+                "category": category,
+                "is_core": is_core
+            }
+        return {"success": False, "message": "Failed to save memory."}
 
     def open_app(self, app_name):
         return self.controller.open_app(app_name)

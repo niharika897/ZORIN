@@ -37,3 +37,17 @@ models/
 
 # Local source review notes
 zorin_source_review.txt
+
+# Generated backups - keep local
+/backup_before_phase2/
+/backup_before_phase2_retry/
+/backup_before_phase3/
+/backup_before_voice_fix/
+
+# Project archive exports - keep local
+*.zip
+
+# Local audit bundles - keep local
+ZORIN_AUDIT*.txt
+ZORIN_MEMORY_AUDIT.txt
+ZORIN_FULL_PROJECT.txt

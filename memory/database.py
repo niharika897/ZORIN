@@ -1,171 +1,99 @@
 import sqlite3
-
 from pathlib import Path
 from datetime import datetime, timezone
+from typing import Optional, List, Dict, Any
+
+from backend.database import get_connection as get_central_connection, DATABASE_PATH, current_timestamp
+from backend.auth import get_user_by_email
+
+# Default user lookup for local desktop calls
+DEFAULT_USER_EMAIL = "niharika@zorin.ai"
+
+
+def get_default_user_id() -> str:
+    u = get_user_by_email(DEFAULT_USER_EMAIL)
+    return u["user_id"] if u else "31aa888e-87d4-4235-9337-d0aec53df402"
 
 
 class Database:
+    """
+    Central Database Client Interface.
+    Points directly to the single unified ZORIN central database: data/zorin_memory.db.
+    Preserves all existing desktop method signatures while ensuring full multi-tenant compatibility.
+    """
 
     def __init__(self, db_path=None):
-
-        project_root = Path(__file__).resolve().parent.parent
-
-        if db_path is None:
-
-            data_folder = project_root / "data"
-            data_folder.mkdir(parents=True, exist_ok=True)
-
-            db_path = data_folder / "zorin_memory.db"
-
-        self.db_path = Path(db_path)
-
+        self.db_path = Path(db_path) if db_path else DATABASE_PATH
         self.initialize()
 
     def get_connection(self):
-
-        connection = sqlite3.connect(self.db_path)
-
+        connection = sqlite3.connect(self.db_path, timeout=10)
         connection.row_factory = sqlite3.Row
-
         connection.execute("PRAGMA foreign_keys = ON")
-
         return connection
 
     def initialize(self):
+        # The central database schema is managed and initialized via backend.database
+        from backend.database import initialize_database
+        initialize_database()
+
+    # ---------------------------------------------------------
+    # CONVERSATIONS & MESSAGES
+    # ---------------------------------------------------------
+
+    def create_conversation(self, title="New Conversation", user_id: Optional[str] = None):
+        uid = user_id or get_default_user_id()
+        now = current_timestamp()
 
         with self.get_connection() as connection:
-
-            connection.execute("""
-                CREATE TABLE IF NOT EXISTS conversations (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    title TEXT,
-                    created_at TEXT NOT NULL
-                )
-            """)
-
-            connection.execute("""
-                CREATE TABLE IF NOT EXISTS messages (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    conversation_id INTEGER NOT NULL,
-                    role TEXT NOT NULL,
-                    content TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-
-                    FOREIGN KEY (conversation_id)
-                    REFERENCES conversations(id)
-                    ON DELETE CASCADE
-                )
-            """)
-
-            connection.execute("""
-                CREATE TABLE IF NOT EXISTS memories (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    category TEXT NOT NULL,
-                    content TEXT NOT NULL,
-                    importance INTEGER DEFAULT 1,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
-                )
-            """)
-
-            # Migrate existing databases safely.
-
-            columns = {
-                row["name"]
-                for row in connection.execute(
-                    "PRAGMA table_info(memories)"
-                ).fetchall()
-            }
-
-            migrations = {
-                "is_core": "INTEGER NOT NULL DEFAULT 0",
-                "source": "TEXT DEFAULT 'conversation'",
-                "memory_type": "TEXT DEFAULT 'long_term'"
-            }
-
-            for column, definition in migrations.items():
-
-                if column not in columns:
-
-                    connection.execute(
-                        f"ALTER TABLE memories ADD COLUMN "
-                        f"{column} {definition}"
-                    )
-
-            connection.execute("""
-                CREATE INDEX IF NOT EXISTS
-                idx_memories_core
-                ON memories(is_core)
-            """)
-
-            connection.execute("""
-                CREATE INDEX IF NOT EXISTS
-                idx_memories_category
-                ON memories(category)
-            """)
-
-            connection.execute("""
-                CREATE INDEX IF NOT EXISTS
-                idx_messages_conversation
-                ON messages(conversation_id)
-            """)
-
-            connection.commit()
-
-    # CONVERSATIONS
-
-    def create_conversation(self, title="New Conversation"):
-
-        now = datetime.now(timezone.utc).isoformat()
-
-        with self.get_connection() as connection:
-
             cursor = connection.execute(
                 """
-                INSERT INTO conversations (title, created_at)
-                VALUES (?, ?)
+                INSERT INTO conversations (title, user_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?)
                 """,
-                (title, now)
+                (title, uid, now, now)
             )
-
+            connection.commit()
             return cursor.lastrowid
 
-    def save_message(self, conversation_id, role, content):
-
-        now = datetime.now(timezone.utc).isoformat()
+    def save_message(self, conversation_id, role, content, user_id: Optional[str] = None, device_id: Optional[str] = None):
+        uid = user_id or get_default_user_id()
+        now = current_timestamp()
 
         with self.get_connection() as connection:
-
             connection.execute(
                 """
                 INSERT INTO messages
-                (conversation_id, role, content, created_at)
-                VALUES (?, ?, ?, ?)
+                (conversation_id, user_id, role, content, device_id, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (conversation_id, role, content, now)
+                (conversation_id, uid, role, content, device_id, now)
             )
+            # Update conversation timestamp
+            connection.execute(
+                "UPDATE conversations SET updated_at = ? WHERE id = ?",
+                (now, conversation_id)
+            )
+            connection.commit()
 
-    def get_recent_messages(self, conversation_id, limit=20):
-
+    def get_recent_messages(self, conversation_id, limit=20, user_id: Optional[str] = None):
+        uid = user_id or get_default_user_id()
         with self.get_connection() as connection:
-
             results = connection.execute(
                 """
                 SELECT role, content, created_at
                 FROM messages
-                WHERE conversation_id = ?
+                WHERE conversation_id = ? AND user_id = ?
                 ORDER BY id DESC
                 LIMIT ?
                 """,
-                (conversation_id, limit)
+                (conversation_id, uid, limit)
             ).fetchall()
-
             return [dict(row) for row in reversed(results)]
 
-    def get_recent_conversation_messages(self, limit=30):
-
+    def get_recent_conversation_messages(self, limit=30, user_id: Optional[str] = None):
+        uid = user_id or get_default_user_id()
         with self.get_connection() as connection:
-
             results = connection.execute(
                 """
                 SELECT
@@ -174,22 +102,20 @@ class Database:
                     messages.created_at,
                     conversations.id AS conversation_id,
                     conversations.title AS conversation_title
-
                 FROM messages
-
                 INNER JOIN conversations
-                ON messages.conversation_id = conversations.id
-
+                    ON messages.conversation_id = conversations.id
+                WHERE messages.user_id = ?
                 ORDER BY messages.id DESC
-
                 LIMIT ?
                 """,
-                (limit,)
+                (uid, limit)
             ).fetchall()
-
             return [dict(row) for row in reversed(results)]
 
-    # LONG-TERM AND CORE MEMORY
+    # ---------------------------------------------------------
+    # MEMORIES: CORE & LONG-TERM
+    # ---------------------------------------------------------
 
     def save_memory(
         self,
@@ -197,228 +123,55 @@ class Database:
         content,
         importance=1,
         is_core=False,
-        source="conversation"
+        source="conversation",
+        user_id: Optional[str] = None
     ):
+        from backend.memory_service import central_memory_service
+        uid = user_id or get_default_user_id()
+        res = central_memory_service.save_memory(
+            user_id=uid,
+            category=category,
+            content=content,
+            importance=importance,
+            is_core=is_core,
+            source=source
+        )
+        return res["id"]
 
-        now = datetime.now(timezone.utc).isoformat()
+    def get_core_memories(self, limit=500, user_id: Optional[str] = None):
+        from backend.memory_service import central_memory_service
+        uid = user_id or get_default_user_id()
+        return central_memory_service.get_core_memories(user_id=uid, limit=limit)
 
-        memory_type = "core" if is_core else "long_term"
+    def get_all_memories(self, limit=500, user_id: Optional[str] = None):
+        from backend.memory_service import central_memory_service
+        uid = user_id or get_default_user_id()
+        return central_memory_service.get_all_memories(user_id=uid, limit=limit)
 
-        with self.get_connection() as connection:
+    def search_memories(self, query, limit=20, user_id: Optional[str] = None):
+        from backend.memory_service import central_memory_service
+        uid = user_id or get_default_user_id()
+        return central_memory_service.search_memories(user_id=uid, query=query, limit=limit)
 
-            existing = connection.execute(
-                """
-                SELECT id, is_core
-                FROM memories
-                WHERE category = ? AND content = ?
-                LIMIT 1
-                """,
-                (category, content)
-            ).fetchone()
+    def update_memory(self, memory_id, new_content, user_id: Optional[str] = None):
+        from backend.memory_service import central_memory_service
+        uid = user_id or get_default_user_id()
+        return central_memory_service.update_memory(user_id=uid, memory_id=memory_id, new_content=new_content)
 
-            if existing:
+    def pin_memory(self, memory_id, user_id: Optional[str] = None):
+        from backend.memory_service import central_memory_service
+        uid = user_id or get_default_user_id()
+        return central_memory_service.pin_memory(user_id=uid, memory_id=memory_id)
 
-                connection.execute(
-                    """
-                    UPDATE memories
+    def unpin_memory(self, memory_id, user_id: Optional[str] = None):
+        from backend.memory_service import central_memory_service
+        uid = user_id or get_default_user_id()
+        return central_memory_service.unpin_memory(user_id=uid, memory_id=memory_id)
 
-                    SET importance = ?,
-                        is_core = ?,
-                        source = ?,
-                        memory_type = ?,
-                        updated_at = ?
-
-                    WHERE id = ?
-                    """,
-                    (
-                        importance,
-                        int(is_core or existing["is_core"]),
-                        source,
-                        "core" if is_core or existing["is_core"]
-                        else memory_type,
-                        now,
-                        existing["id"]
-                    )
-                )
-
-                return existing["id"]
-
-            cursor = connection.execute(
-                """
-                INSERT INTO memories (
-                    category,
-                    content,
-                    importance,
-                    created_at,
-                    updated_at,
-                    is_core,
-                    source,
-                    memory_type
-                )
-
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    category,
-                    content,
-                    importance,
-                    now,
-                    now,
-                    int(is_core),
-                    source,
-                    memory_type
-                )
-            )
-
-            return cursor.lastrowid
-
-    def get_core_memories(self, limit=500):
-
-        with self.get_connection() as connection:
-
-            results = connection.execute(
-                """
-                SELECT *
-                FROM memories
-                WHERE is_core = 1
-                ORDER BY importance DESC, updated_at DESC
-                LIMIT ?
-                """,
-                (limit,)
-            ).fetchall()
-
-            return [dict(row) for row in results]
-
-    def get_all_memories(self, limit=500):
-
-        with self.get_connection() as connection:
-
-            results = connection.execute(
-                """
-                SELECT *
-                FROM memories
-
-                ORDER BY
-                    is_core DESC,
-                    importance DESC,
-                    updated_at DESC
-
-                LIMIT ?
-                """,
-                (limit,)
-            ).fetchall()
-
-            return [dict(row) for row in results]
-
-    def search_memories(self, query, limit=20):
-
-        with self.get_connection() as connection:
-
-            results = connection.execute(
-                """
-                SELECT *
-                FROM memories
-
-                WHERE content LIKE ?
-                OR category LIKE ?
-
-                ORDER BY
-                    is_core DESC,
-                    importance DESC,
-                    updated_at DESC
-
-                LIMIT ?
-                """,
-                (f"%{query}%", f"%{query}%", limit)
-            ).fetchall()
-
-            return [dict(row) for row in results]
-
-    def update_memory(self, memory_id, new_content):
-
-        now = datetime.now(timezone.utc).isoformat()
-
-        with self.get_connection() as connection:
-
-            cursor = connection.execute(
-                """
-                UPDATE memories
-
-                SET content = ?,
-                    updated_at = ?
-
-                WHERE id = ?
-                """,
-                (new_content, now, memory_id)
-            )
-
-            return cursor.rowcount > 0
-
-    def pin_memory(self, memory_id):
-
-        now = datetime.now(timezone.utc).isoformat()
-
-        with self.get_connection() as connection:
-
-            cursor = connection.execute(
-                """
-                UPDATE memories
-
-                SET is_core = 1,
-                    memory_type = 'core',
-                    importance = 5,
-                    updated_at = ?
-
-                WHERE id = ?
-                """,
-                (now, memory_id)
-            )
-
-            return cursor.rowcount > 0
-
-    def unpin_memory(self, memory_id):
-
-        now = datetime.now(timezone.utc).isoformat()
-
-        with self.get_connection() as connection:
-
-            cursor = connection.execute(
-                """
-                UPDATE memories
-
-                SET is_core = 0,
-                    memory_type = 'long_term',
-                    updated_at = ?
-
-                WHERE id = ?
-                """,
-                (now, memory_id)
-            )
-
-            return cursor.rowcount > 0
-
-    def delete_memory(self, memory_id, allow_core=False):
-
-        with self.get_connection() as connection:
-
-            if not allow_core:
-
-                cursor = connection.execute(
-                    """
-                    DELETE FROM memories
-                    WHERE id = ? AND is_core = 0
-                    """,
-                    (memory_id,)
-                )
-
-            else:
-
-                cursor = connection.execute(
-                    """
-                    DELETE FROM memories
-                    WHERE id = ?
-                    """,
-                    (memory_id,)
-                )
-
-            return cursor.rowcount > 0
+    def delete_memory(self, memory_id, allow_core=False, user_id: Optional[str] = None):
+        from backend.memory_service import central_memory_service, CoreMemoryProtectedError
+        uid = user_id or get_default_user_id()
+        try:
+            return central_memory_service.delete_memory(user_id=uid, memory_id=memory_id, allow_core=allow_core)
+        except CoreMemoryProtectedError:
+            return False
