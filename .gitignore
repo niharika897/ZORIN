@@ -1,0 +1,39 @@
+# API keys and secrets
+.env
+.env.*
+
+# Python environment and cache
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Personal databases and memory
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Device-specific identity
+device/device_identity.json
+
+# Editor settings
+.vscode/
+
+# Local recordings and backups
+*.wav
+*.backup
+
+# Downloadable speech recognition models
+models/
+
+# Old code backups
+*.backup*
+*.before_*
+*.factory_backup
+*.pre_crossplatform
+*_backup.py
+*_before_*.py
+
+# Local source review notes
+zorin_source_review.txt
