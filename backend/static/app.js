@@ -285,6 +285,61 @@ class ZorinApp {
     this.dom.newMemoryInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') this.addMemory();
     });
+
+    // Device PIN Pairing
+    const btnSubmitPair = document.getElementById('btnSubmitPair');
+    const inputPairPin = document.getElementById('inputPairPin');
+    const pairStatusMsg = document.getElementById('pairStatusMsg');
+
+    if (btnSubmitPair && inputPairPin) {
+      btnSubmitPair.addEventListener('click', async () => {
+        const pin = inputPairPin.value.trim();
+        if (!pin) return;
+        pairStatusMsg.style.display = 'block';
+        pairStatusMsg.style.color = '#67E8F9';
+        pairStatusMsg.textContent = 'Verifying PIN with central hub...';
+
+        const isAndroid = /Android/i.test(navigator.userAgent);
+        const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+        const devName = isAndroid ? 'Android Smartphone' : (isIOS ? 'Apple iPhone' : 'Mobile Web Client');
+
+        const identity = {
+          device_id: 'phone-' + Math.random().toString(36).substring(2, 10),
+          device_name: devName,
+          operating_system: isAndroid ? 'Android' : (isIOS ? 'iOS' : 'Mobile Web'),
+          client_type: 'mobile',
+          device_type: isAndroid ? 'android_phone' : (isIOS ? 'iphone' : 'mobile'),
+          has_microphone: true,
+          has_speaker: true,
+          capabilities: ['voice_input', 'audio_output', 'shared_memory']
+        };
+
+        try {
+          const resp = await fetch('/api/devices/pair/confirm', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pin_or_token: pin, identity })
+          });
+          const result = await resp.json();
+          if (resp.ok && result.success) {
+            pairStatusMsg.style.color = '#34D399';
+            pairStatusMsg.textContent = '✓ ' + result.message;
+            if (result.auth_token) {
+              this.token = result.auth_token;
+              localStorage.setItem('zorin_token', result.auth_token);
+              await this.fetchCurrentUser();
+              await this.fetchDevices();
+            }
+          } else {
+            pairStatusMsg.style.color = '#F87171';
+            pairStatusMsg.textContent = '✕ ' + (result.detail || result.error || 'Failed to pair device.');
+          }
+        } catch (err) {
+          pairStatusMsg.style.color = '#F87171';
+          pairStatusMsg.textContent = '✕ Network error connecting to hub.';
+        }
+      });
+    }
   }
 
   // -------------------------------------------------------------

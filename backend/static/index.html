@@ -123,15 +123,24 @@
         <div class="card-header">
           <h3 class="card-title">📱 Connect Other Devices</h3>
         </div>
-        <p style="font-size:0.8rem;color:var(--text-muted);line-height:1.4;margin-bottom:12px;">
-          To control your laptop from your phone or tablet:
+        <p style="font-size:0.8rem;color:var(--text-muted);line-height:1.4;margin-bottom:10px;">
+          Link this phone to your laptop's ZORIN Central Brain:
         </p>
+
+        <!-- PIN PAIRING FORM -->
+        <div style="background:rgba(0,0,0,0.35);padding:10px;border-radius:8px;border:1px solid rgba(103,232,249,0.2);margin-bottom:12px;">
+          <label style="font-size:0.75rem;color:var(--text-muted);display:block;margin-bottom:6px;">Enter 6-Digit PIN from Desktop Screen:</label>
+          <div style="display:flex;gap:6px;">
+            <input type="text" id="inputPairPin" placeholder="e.g. 482910" style="flex:1;background:#0d111e;border:1px solid #332d56;color:white;border-radius:6px;padding:6px 10px;font-size:0.95rem;text-align:center;letter-spacing:3px;font-family:monospace;">
+            <button id="btnSubmitPair" class="quick-btn" style="padding:6px 14px;border-color:var(--accent-cyan);color:var(--accent-cyan);font-weight:bold;cursor:pointer;">Pair</button>
+          </div>
+          <div id="pairStatusMsg" style="font-size:0.75rem;margin-top:6px;display:none;"></div>
+        </div>
+
         <ol style="font-size:0.78rem;color:var(--text-main);padding-left:18px;line-height:1.6;">
-          <li>Open this URL on your phone's browser (or add to Home Screen).</li>
-          <li>Keep the ZORIN agent running on your computer:
-            <code style="background:rgba(0,0,0,0.4);padding:2px 6px;border-radius:4px;color:var(--accent-cyan);display:block;margin:6px 0;">python -m device.agent</code>
-          </li>
-          <li>Commands given from your phone will immediately execute on your computer!</li>
+          <li>Open this page on your phone (or add to Home Screen).</li>
+          <li>Enter the 6-Digit PIN shown on your Laptop's Device Center.</li>
+          <li>Tap <b>Pair</b> to link this phone with shared memory & voice!</li>
         </ol>
       </div>
 

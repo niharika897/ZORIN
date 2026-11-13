@@ -142,6 +142,110 @@ class ZorinBackendClient:
         from memory.database import get_default_user_id
         return central_memory_service.get_persistent_memory_context(get_default_user_id())
 
+    # ---------------------------------------------------------
+    # MULTI-DEVICE MANAGEMENT OPERATIONS
+    # ---------------------------------------------------------
+
+    def get_devices(self) -> List[dict]:
+        res = self._http_request("/api/devices")
+        if res and res.get("success"):
+            return res.get("devices", [])
+
+        # Local fallback
+        try:
+            from backend.device_registry import get_user_devices
+            from memory.database import get_default_user_id
+            return get_user_devices(get_default_user_id())
+        except Exception:
+            return []
+
+    def get_nearby_devices(self) -> List[dict]:
+        res = self._http_request("/api/devices/available")
+        if res and res.get("success"):
+            return res.get("devices", [])
+
+        # Local fallback
+        try:
+            from backend.device_registry import scan_nearby_devices
+            return scan_nearby_devices()
+        except Exception:
+            return []
+
+    def request_pairing(self, server_url: Optional[str] = None) -> dict:
+        data = {"server_url": server_url}
+        res = self._http_request("/api/devices/pair/request", method="POST", data=data)
+        if res and res.get("success"):
+            return res
+
+        # Local fallback
+        try:
+            from backend.device_registry import create_pairing_token
+            from memory.database import get_default_user_id
+            return create_pairing_token(get_default_user_id(), server_url)
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def confirm_pairing(self, pin_or_token: str, identity: dict) -> dict:
+        data = {"pin_or_token": pin_or_token, "identity": identity}
+        res = self._http_request("/api/devices/pair/confirm", method="POST", data=data)
+        if res and res.get("success"):
+            return res
+
+        # Local fallback
+        try:
+            from backend.device_registry import consume_pairing_token
+            return consume_pairing_token(pin_or_token, identity)
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def connect_device(self, device_id: str) -> bool:
+        res = self._http_request(f"/api/devices/{device_id}/connect", method="POST")
+        if res and res.get("success"):
+            return True
+
+        try:
+            from backend.device_registry import set_device_connection_status
+            from memory.database import get_default_user_id
+            return set_device_connection_status(get_default_user_id(), device_id, "online")
+        except Exception:
+            return False
+
+    def disconnect_device(self, device_id: str) -> bool:
+        res = self._http_request(f"/api/devices/{device_id}/disconnect", method="POST")
+        if res and res.get("success"):
+            return True
+
+        try:
+            from backend.device_registry import set_device_connection_status
+            from memory.database import get_default_user_id
+            return set_device_connection_status(get_default_user_id(), device_id, "offline")
+        except Exception:
+            return False
+
+    def remove_device(self, device_id: str) -> bool:
+        res = self._http_request(f"/api/devices/{device_id}", method="DELETE")
+        if res and res.get("success"):
+            return True
+
+        try:
+            from backend.device_registry import delete_device
+            from memory.database import get_default_user_id
+            return delete_device(get_default_user_id(), device_id)
+        except Exception:
+            return False
+
+    def set_default_device(self, device_id: str) -> bool:
+        res = self._http_request(f"/api/devices/{device_id}/default", method="POST")
+        if res and res.get("success"):
+            return True
+
+        try:
+            from backend.device_registry import set_default_device
+            from memory.database import get_default_user_id
+            return set_default_device(get_default_user_id(), device_id)
+        except Exception:
+            return False
+
 
 # Module-level helper for existing code compatibility
 _default_client = ZorinBackendClient()

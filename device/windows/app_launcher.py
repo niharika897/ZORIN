@@ -30,7 +30,10 @@ class WindowsDeviceController(DeviceController):
             "calc": "calculator",
             "command prompt": "cmd",
             "terminal": "windows terminal",
+            "whatsapp": "whatsapp",
             "whatsapp desktop": "whatsapp",
+            "whats app": "whatsapp",
+            "whatsapp app": "whatsapp",
             "ms word": "word",
             "microsoft word": "word",
             "ms excel": "excel",
@@ -207,6 +210,31 @@ class WindowsDeviceController(DeviceController):
         name = self.app_aliases.get(name, name)
 
         try:
+            # Direct Windows URI protocols (e.g. WhatsApp, Microsoft Store apps)
+            if name in ("whatsapp", "whatsapp desktop", "whatsapp app", "whats app"):
+                opened = False
+                try:
+                    subprocess.Popen(["cmd.exe", "/c", "start", "whatsapp:"], shell=True)
+                    opened = True
+                except Exception:
+                    try:
+                        os.startfile("whatsapp:")
+                        opened = True
+                    except Exception:
+                        opened = False
+
+                if opened:
+                    return {
+                        "success": True,
+                        "message": f"Opened {original_name} application."
+                    }
+                else:
+                    webbrowser.open("https://web.whatsapp.com")
+                    return {
+                        "success": True,
+                        "message": "Opened WhatsApp Web in your default browser."
+                    }
+
             # Direct Windows commands
             if name in self.app_commands:
                 subprocess.Popen(self.app_commands[name])

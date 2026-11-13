@@ -13,10 +13,17 @@ def current_timestamp():
     return datetime.now(timezone.utc).isoformat()
 
 
+_DATABASE_INITIALIZED = False
+
+
 def initialize_database():
     """
     Initializes the unified multi-user, multi-device SQLite database schema with safe migrations.
     """
+    global _DATABASE_INITIALIZED
+    if _DATABASE_INITIALIZED:
+        return
+
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     with sqlite3.connect(DATABASE_PATH) as conn:
@@ -125,6 +132,11 @@ def initialize_database():
         ensure_column("devices", "user_id", "TEXT")
         ensure_column("devices", "is_default", "INTEGER DEFAULT 0")
         ensure_column("devices", "auth_token", "TEXT")
+        ensure_column("devices", "device_type", "TEXT DEFAULT 'laptop'")
+        ensure_column("devices", "has_microphone", "INTEGER DEFAULT 1")
+        ensure_column("devices", "has_speaker", "INTEGER DEFAULT 1")
+        ensure_column("devices", "ip_address", "TEXT DEFAULT '127.0.0.1'")
+        ensure_column("devices", "pairing_status", "TEXT DEFAULT 'paired'")
         ensure_column("memories", "user_id", "TEXT")
         ensure_column("memories", "is_core", "INTEGER NOT NULL DEFAULT 0")
         ensure_column("memories", "source", "TEXT DEFAULT 'conversation'")
@@ -135,8 +147,23 @@ def initialize_database():
         ensure_column("messages", "user_id", "TEXT")
         ensure_column("messages", "device_id", "TEXT")
 
+        # 7. Device Pairing Tokens Table (6-digit PIN & QR Code cross-device pairing)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS device_pairing_tokens (
+                token_id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                pin_code TEXT NOT NULL,
+                qr_data TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                used INTEGER DEFAULT 0,
+                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+            )
+        """)
+
         # Indexes for fast lookup
         conn.execute("CREATE INDEX IF NOT EXISTS idx_devices_user ON devices(user_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_pairing_pin ON device_pairing_tokens(pin_code, used)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_messages_user ON messages(user_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_memories_user ON memories(user_id)")
@@ -144,6 +171,8 @@ def initialize_database():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_commands_target ON remote_commands(target_device_id, status)")
 
         conn.commit()
+
+    _DATABASE_INITIALIZED = True
 
 
 @contextmanager

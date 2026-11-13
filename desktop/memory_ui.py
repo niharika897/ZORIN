@@ -1,4 +1,4 @@
-import sys
+﻿import sys
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -19,6 +19,8 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QInputDialog,
     QFormLayout,
+    QGroupBox,
+    QSplitter,
 )
 
 from memory.memory_manager import MemoryManager
@@ -130,7 +132,6 @@ class MemoryDashboard(QDialog):
         main_layout = QVBoxLayout(self)
 
         heading = QLabel("🧠  ZORIN MEMORY CENTER")
-
         heading.setStyleSheet("""
             font-size: 25px;
             font-weight: bold;
@@ -141,7 +142,6 @@ class MemoryDashboard(QDialog):
         subtitle = QLabel(
             "Manage what ZORIN remembers about you."
         )
-
         subtitle.setStyleSheet(
             "color: #aaa3c9; padding-left: 14px;"
         )
@@ -154,6 +154,7 @@ class MemoryDashboard(QDialog):
         self.build_core_tab()
         self.build_long_term_tab()
         self.build_search_tab()
+        self.build_conversation_tab()
 
         main_layout.addWidget(self.tabs)
 
@@ -184,7 +185,6 @@ class MemoryDashboard(QDialog):
             "Protected memories containing important facts, "
             "preferences and information about you."
         )
-
         description.setWordWrap(True)
 
         self.core_list = QListWidget()
@@ -196,11 +196,9 @@ class MemoryDashboard(QDialog):
         delete_button = QPushButton("Delete")
 
         add_button.clicked.connect(self.add_core_memory)
-
         edit_button.clicked.connect(
             lambda: self.edit_selected_memory("core")
         )
-
         delete_button.clicked.connect(
             lambda: self.delete_selected_memory("core")
         )
@@ -243,9 +241,7 @@ class MemoryDashboard(QDialog):
             lambda: self.edit_selected_memory("long")
         )
 
-        pin_button.clicked.connect(
-            self.pin_selected_memory
-        )
+        pin_button.clicked.connect(self.pin_selected_memory)
 
         delete_button.clicked.connect(
             lambda: self.delete_selected_memory("long")
@@ -278,17 +274,13 @@ class MemoryDashboard(QDialog):
         search_row = QHBoxLayout()
 
         self.search_input = QLineEdit()
-
         self.search_input.setPlaceholderText(
             "Search memories..."
         )
 
         search_button = QPushButton("Search")
 
-        search_button.clicked.connect(
-            self.search_memories
-        )
-
+        search_button.clicked.connect(self.search_memories)
         self.search_input.returnPressed.connect(
             self.search_memories
         )
@@ -303,6 +295,26 @@ class MemoryDashboard(QDialog):
         layout.addWidget(self.search_results)
 
         self.tabs.addTab(page, "Search")
+
+    # --------------------------------------------------
+    # CONVERSATIONS
+    # --------------------------------------------------
+
+    def build_conversation_tab(self):
+
+        page = QWidget()
+        layout = QVBoxLayout(page)
+
+        description = QLabel(
+            "Recent conversation history stored by ZORIN."
+        )
+
+        self.conversation_list = QListWidget()
+
+        layout.addWidget(description)
+        layout.addWidget(self.conversation_list)
+
+        self.tabs.addTab(page, "Conversations")
 
     # --------------------------------------------------
     # NORMALIZE MEMORY RECORDS
@@ -342,7 +354,6 @@ class MemoryDashboard(QDialog):
     def refresh_all(self):
 
         try:
-
             self.core_memories = [
                 self.to_dict(item)
                 for item in self.memory.get_core_memories()
@@ -355,6 +366,7 @@ class MemoryDashboard(QDialog):
 
             self.populate_core_list()
             self.populate_long_list()
+            self.load_conversations()
 
         except Exception as error:
 
@@ -376,14 +388,8 @@ class MemoryDashboard(QDialog):
 
             content = self.memory_content(memory)
 
-            item = QListWidgetItem(
-                "🔒  " + content
-            )
-
-            item.setData(
-                Qt.UserRole,
-                memory
-            )
+            item = QListWidgetItem("🔒  " + content)
+            item.setData(Qt.UserRole, memory)
 
             self.core_list.addItem(item)
 
@@ -395,14 +401,8 @@ class MemoryDashboard(QDialog):
 
             content = self.memory_content(memory)
 
-            item = QListWidgetItem(
-                "🧠  " + content
-            )
-
-            item.setData(
-                Qt.UserRole,
-                memory
-            )
+            item = QListWidgetItem("🧠  " + content)
+            item.setData(Qt.UserRole, memory)
 
             self.long_list.addItem(item)
 
@@ -413,7 +413,6 @@ class MemoryDashboard(QDialog):
     def memory_input_dialog(self, title):
 
         dialog = QDialog(self)
-
         dialog.setWindowTitle(title)
         dialog.resize(480, 360)
 
@@ -422,13 +421,11 @@ class MemoryDashboard(QDialog):
         form = QFormLayout()
 
         content_input = QTextEdit()
-
         content_input.setPlaceholderText(
             "Enter the information ZORIN should remember..."
         )
 
         category_input = QComboBox()
-
         category_input.addItems([
             "personal",
             "preferences",
@@ -439,24 +436,12 @@ class MemoryDashboard(QDialog):
         ])
 
         importance_input = QSpinBox()
-
         importance_input.setRange(1, 10)
         importance_input.setValue(5)
 
-        form.addRow(
-            "Memory:",
-            content_input
-        )
-
-        form.addRow(
-            "Category:",
-            category_input
-        )
-
-        form.addRow(
-            "Importance:",
-            importance_input
-        )
+        form.addRow("Memory:", content_input)
+        form.addRow("Category:", category_input)
+        form.addRow("Importance:", importance_input)
 
         layout.addLayout(form)
 
@@ -479,13 +464,11 @@ class MemoryDashboard(QDialog):
         content = content_input.toPlainText().strip()
 
         if not content:
-
             QMessageBox.warning(
                 self,
                 "Empty Memory",
                 "Please enter something to remember."
             )
-
             return None
 
         return {
@@ -500,9 +483,7 @@ class MemoryDashboard(QDialog):
 
     def add_core_memory(self):
 
-        data = self.memory_input_dialog(
-            "Add Core Memory"
-        )
+        data = self.memory_input_dialog("Add Core Memory")
 
         if not data:
             return
@@ -531,9 +512,7 @@ class MemoryDashboard(QDialog):
 
     def add_long_memory(self):
 
-        data = self.memory_input_dialog(
-            "Add Long-term Memory"
-        )
+        data = self.memory_input_dialog("Add Long-term Memory")
 
         if not data:
             return
@@ -563,21 +542,17 @@ class MemoryDashboard(QDialog):
     def get_selected_memory(self, memory_type):
 
         if memory_type == "core":
-
             item = self.core_list.currentItem()
 
         else:
-
             item = self.long_list.currentItem()
 
         if item is None:
-
             QMessageBox.information(
                 self,
                 "Select Memory",
                 "Please select a memory first."
             )
-
             return None
 
         return item.data(Qt.UserRole)
@@ -608,13 +583,11 @@ class MemoryDashboard(QDialog):
         new_content = new_content.strip()
 
         if not new_content:
-
             QMessageBox.warning(
                 self,
                 "Invalid Memory",
                 "Memory cannot be empty."
             )
-
             return
 
         try:
@@ -722,11 +695,9 @@ class MemoryDashboard(QDialog):
             results = self.memory.recall(query)
 
             if not results:
-
                 self.search_results.addItem(
                     "No matching memories found."
                 )
-
                 return
 
             for result in results:
@@ -771,6 +742,59 @@ class MemoryDashboard(QDialog):
                 "Unpin Error",
                 str(error)
             )
+
+    # --------------------------------------------------
+    # CONVERSATION HISTORY
+    # --------------------------------------------------
+
+    def load_conversations(self):
+
+        self.conversation_list.clear()
+
+        try:
+
+            messages = (
+                self.memory.database
+                .get_recent_conversation_messages(limit=100)
+            )
+
+            for message in messages:
+
+                data = self.to_dict(message)
+
+                role = str(
+                    data.get("role", "Unknown")
+                ).upper()
+
+                content = str(
+                    data.get("content")
+                    or data.get("message")
+                    or ""
+                )
+
+                timestamp = str(
+                    data.get("timestamp")
+                    or data.get("created_at")
+                    or ""
+                )
+
+                display_text = (
+                    f"{role}\n"
+                    f"{content}\n"
+                    f"{timestamp}"
+                )
+
+                self.conversation_list.addItem(
+                    display_text
+                )
+
+        except Exception as error:
+
+            self.conversation_list.addItem(
+                "Unable to load conversation history."
+            )
+
+            print("Conversation history error:", error)
 
 
 # ------------------------------------------------------

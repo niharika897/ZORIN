@@ -28,6 +28,10 @@ from backend.device_registry import (
     set_default_device,
     update_device_status,
     delete_device,
+    create_pairing_token,
+    consume_pairing_token,
+    scan_nearby_devices,
+    set_device_connection_status,
 )
 from backend.device_hub import device_hub
 from backend.assistant_service import assistant_service
@@ -67,6 +71,15 @@ class DeviceRegistration(BaseModel):
 
 class DeviceStatusUpdate(BaseModel):
     status: str
+
+
+class PairingRequest(BaseModel):
+    server_url: Optional[str] = None
+
+
+class PairingConfirmRequest(BaseModel):
+    pin_or_token: str
+    identity: dict
 
 
 class CommandDispatchRequest(BaseModel):
@@ -468,6 +481,72 @@ async def dispatch_device_command(
         timeout=req.timeout
     )
     return {"success": result.get("success", False), "result": result}
+
+
+@app.post("/api/devices/pair/request")
+async def request_device_pairing(
+    req: PairingRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Generates a 6-digit PIN and QR-code data for pairing a phone, laptop, or tablet."""
+    res = create_pairing_token(
+        user_id=current_user["user_id"],
+        server_url=req.server_url
+    )
+    return res
+
+
+@app.post("/api/devices/pair/confirm")
+async def confirm_device_pairing(req: PairingConfirmRequest):
+    """
+    Called by an incoming client (Android app, iPhone web app, secondary computer)
+    using the 6-digit PIN or QR token to pair into the user's fleet.
+    """
+    try:
+        res = consume_pairing_token(
+            pin_or_token=req.pin_or_token,
+            device_identity=req.identity
+        )
+        return res
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/devices/{device_id}/connect")
+async def connect_device_endpoint(
+    device_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Manually toggles device connection state to online."""
+    ok = set_device_connection_status(current_user["user_id"], device_id, "online")
+    if not ok:
+        raise HTTPException(status_code=404, detail="Device not found.")
+    return {"success": True, "message": f"Device {device_id} connected."}
+
+
+@app.post("/api/devices/{device_id}/disconnect")
+async def disconnect_device_endpoint(
+    device_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Manually disconnects device and marks it offline."""
+    ok = set_device_connection_status(current_user["user_id"], device_id, "offline")
+    if not ok:
+        raise HTTPException(status_code=404, detail="Device not found.")
+    await device_hub.disconnect_device(device_id)
+    return {"success": True, "message": f"Device {device_id} disconnected."}
+
+
+@app.get("/api/devices/available")
+@app.get("/api/devices/nearby")
+async def get_nearby_devices_endpoint(current_user: dict = Depends(get_current_user)):
+    """Discovers available local audio, Bluetooth headsets, and hardware endpoints."""
+    nearby = scan_nearby_devices()
+    return {
+        "success": True,
+        "count": len(nearby),
+        "devices": nearby
+    }
 
 
 # -------------------------------------------------------------

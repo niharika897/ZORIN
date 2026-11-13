@@ -1,6 +1,7 @@
 # API keys and secrets
 .env
 .env.*
+!.env.example
 
 # Python environment and cache
 .venv/
@@ -46,6 +47,14 @@ zorin_source_review.txt
 
 # Project archive exports - keep local
 *.zip
+
+# Logs
+*.log
+app_stderr.log
+app_stdout.log
+
+# Desktop backups
+desktop/backup*/
 
 # Local audit bundles - keep local
 ZORIN_AUDIT*.txt

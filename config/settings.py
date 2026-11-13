@@ -17,7 +17,7 @@ GEMINI_MODEL =  "gemini-3.1-flash-live-preview"
 
 # ZORIN identity
 ASSISTANT_NAME = "ZORIN"
-WAKE_WORD = "Hey"
+WAKE_WORD = "Hey Zorin"
 
 # Audio configuration
 INPUT_SAMPLE_RATE = 16000

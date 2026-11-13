@@ -34,11 +34,15 @@ def get_device_identity(controller=None):
         except Exception:
             pass
 
+    node_lower = platform.node().lower()
+    dev_type = "laptop" if any(k in node_lower for k in ("laptop", "book", "surface")) else "desktop"
+
     identity = {
         "device_id": device_id,
         "device_name": device_info.get(
             "device_name", platform.node()
         ),
+        "device_type": dev_type,
         "operating_system": device_info.get(
             "operating_system", platform.system()
         ),
@@ -46,8 +50,11 @@ def get_device_identity(controller=None):
             "architecture", platform.machine()
         ),
         "client_type": "desktop",
+        "has_microphone": True,
+        "has_speaker": True,
+        "ip_address": "127.0.0.1",
         "capabilities": device_info.get(
-            "capabilities", []
+            "capabilities", ["open_app", "open_website", "create_website", "voice_input", "audio_output"]
         )
     }
 

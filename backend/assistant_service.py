@@ -220,6 +220,18 @@ class MultiDeviceAssistantService:
             parameters=args
         )
 
+        # Fallback to local execution if remote WebSocket tunnel is offline
+        if result.get("offline") or not result.get("success"):
+            try:
+                from core.tool_router import ToolRouter
+                local_router = ToolRouter()
+                local_res = local_router.execute(tool_name, **args)
+                if local_res and local_res.get("success"):
+                    local_res["target_device_name"] = resolved_device_name
+                    return local_res
+            except Exception as local_err:
+                print("Local tool execution fallback note:", local_err)
+
         result["target_device_name"] = resolved_device_name
         return result
 
@@ -386,27 +398,41 @@ class MultiDeviceAssistantService:
     def _save_interaction(self, user_id: str, conversation_id: Optional[str], user_text: str, ai_text: str, device_id: Optional[str]):
         try:
             with get_connection() as conn:
-                conv_id = conversation_id or "default_session"
                 now = current_timestamp()
+                numeric_cid = None
+                try:
+                    if conversation_id and str(conversation_id).isdigit():
+                        numeric_cid = int(conversation_id)
+                except Exception:
+                    pass
 
-                # Ensure conversation entry exists
-                conn.execute("""
-                    INSERT INTO conversations (conversation_id, user_id, title, device_id, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(conversation_id) DO UPDATE SET updated_at = excluded.updated_at
-                """, (conv_id, user_id, user_text[:30] + "...", device_id, now, now))
+                if numeric_cid:
+                    row = conn.execute("SELECT id FROM conversations WHERE id = ?", (numeric_cid,)).fetchone()
+                    if not row:
+                        conn.execute("""
+                            INSERT INTO conversations (id, user_id, title, device_id, created_at, updated_at)
+                            VALUES (?, ?, ?, ?, ?, ?)
+                        """, (numeric_cid, user_id, user_text[:30] + "...", device_id, now, now))
+                    else:
+                        conn.execute("UPDATE conversations SET updated_at = ? WHERE id = ?", (now, numeric_cid))
+                else:
+                    cursor = conn.execute("""
+                        INSERT INTO conversations (user_id, title, device_id, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (user_id, user_text[:30] + "...", device_id, now, now))
+                    numeric_cid = cursor.lastrowid
 
                 # Save user message
                 conn.execute("""
                     INSERT INTO messages (conversation_id, user_id, role, content, device_id, created_at)
                     VALUES (?, ?, 'user', ?, ?, ?)
-                """, (conv_id, user_id, user_text, device_id, now))
+                """, (numeric_cid, user_id, user_text, device_id, now))
 
                 # Save assistant message
                 conn.execute("""
                     INSERT INTO messages (conversation_id, user_id, role, content, device_id, created_at)
                     VALUES (?, ?, 'assistant', ?, ?, ?)
-                """, (conv_id, user_id, ai_text, device_id, now))
+                """, (numeric_cid, user_id, ai_text, device_id, now))
 
                 conn.commit()
         except Exception as e:
