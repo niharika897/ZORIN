@@ -1,3 +1,4 @@
+import os
 import socket
 import uvicorn
 import sys
@@ -25,7 +26,8 @@ def get_local_ip():
 
 def main():
     local_ip = get_local_ip()
-    port = 8000
+    port = int(os.environ.get("PORT", 8000))
+    host = os.environ.get("HOST", "0.0.0.0")
 
     print("=" * 66)
     print("        🚀 ZORIN MULTI-DEVICE SERVER INITIALIZING")
@@ -39,9 +41,9 @@ def main():
     print(f"          http://{local_ip}:{port}")
     print(f"       3. Tap 'Share' -> 'Add to Home Screen' to install as App!")
     print("=" * 66)
-    print("Starting server on 0.0.0.0:8000...\n")
+    print(f"Starting server on {host}:{port}...\n")
 
-    uvicorn.run("backend.server:app", host="0.0.0.0", port=port, log_level="info")
+    uvicorn.run("backend.server:app", host=host, port=port, log_level="info")
 
 
 if __name__ == "__main__":
