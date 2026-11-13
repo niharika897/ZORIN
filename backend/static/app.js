@@ -132,6 +132,13 @@ class ZorinApp {
   speakText(text) {
     if (!this.synth) return;
 
+    // Do not speak in browser if web audio is muted or on desktop PC
+    // where the native ZORIN desktop app is already playing high-quality audio
+    const isMobile = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
+    if (!isMobile || localStorage.getItem('zorin_web_muted') === 'true') {
+      return;
+    }
+
     // Cancel existing utterance
     this.synth.cancel();
 

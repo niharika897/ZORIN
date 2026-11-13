@@ -40,7 +40,8 @@ class VoiceConversation:
     """
 
     # Barge-in RMS threshold (when AI speaker is playing)
-    BARGE_IN_RMS_THRESHOLD = 350.0
+    # Set to 750.0 with 3 consecutive blocks (~300ms) to prevent speaker bleed false triggers
+    BARGE_IN_RMS_THRESHOLD = 750.0
 
     def __init__(
         self,
@@ -224,8 +225,8 @@ class VoiceConversation:
                     rms = self.microphone.current_rms
                     if rms > self.BARGE_IN_RMS_THRESHOLD:
                         self._consecutive_loud_frames += 1
-                        if self._consecutive_loud_frames >= 2:
-                            # 2 consecutive blocks (~200ms) of sustained user voice
+                        if self._consecutive_loud_frames >= 3:
+                            # 3 consecutive blocks (~300ms) of sustained user voice
                             self.trigger_barge_in("Voice energy detected during speech")
                             self._consecutive_loud_frames = 0
                     else:
