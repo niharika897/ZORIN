@@ -37,6 +37,20 @@ class MultiDeviceAssistantService:
             types.Tool(
                 function_declarations=[
                     types.FunctionDeclaration(
+                        name="web_search",
+                        description="Search the live web for real-time information, current 2026 events, breaking news, facts, scores, weather, or recent developments.",
+                        parameters={
+                            "type": "OBJECT",
+                            "properties": {
+                                "query": {
+                                    "type": "STRING",
+                                    "description": "The search query to look up on the live web."
+                                }
+                            },
+                            "required": ["query"]
+                        }
+                    ),
+                    types.FunctionDeclaration(
                         name="open_app",
                         description=(
                             "Open an installed application (Chrome, VS Code, Spotify, Notepad, Calculator, WhatsApp, etc.) "
@@ -187,6 +201,10 @@ class MultiDeviceAssistantService:
                 ]
             }
 
+        if tool_name == "web_search":
+            from intelligence.web_search import search_web
+            return search_web(args.get("query", ""))
+
         if tool_name == "save_memory":
             from backend.memory_service import central_memory_service
             res = central_memory_service.save_memory(
@@ -237,6 +255,10 @@ class MultiDeviceAssistantService:
 
     def _get_user_context(self, user_id: str, user_profile: dict) -> str:
         """Loads persistent memories and system instructions for the specific user from Central Memory Service."""
+        from datetime import datetime
+        now = datetime.now()
+        current_date_str = now.strftime("%A, %B %d, %Y")
+
         from backend.memory_service import central_memory_service
         memory_str = central_memory_service.get_persistent_memory_context(user_id) or "No saved memories yet."
         past_conv = central_memory_service.get_past_conversation_context(user_id, limit=20)
@@ -252,7 +274,10 @@ class MultiDeviceAssistantService:
         display_name = user_profile.get("display_name", "User")
 
         instructions = (
-            f"You are ZORIN, a premier multi-device personal AI assistant. "
+            f"You are ZORIN, a premier multi-device personal AI assistant.\n"
+            f"CURRENT TEMPORAL CONTEXT: You are operating in the present year {now.year}. Today's date is {current_date_str}.\n"
+            f"You are equipped with the web_search tool to look up live {now.year} information, current facts, and news.\n"
+            f"Never claim your information is cut off in the past; use web_search for real-time facts.\n\n"
             f"You are talking with {display_name}.\n\n"
             f"USER'S REGISTERED DEVICES:\n{device_str}\n\n"
             f"SAVED USER MEMORIES & PREFERENCES:\n{memory_str}\n\n"
@@ -261,8 +286,9 @@ class MultiDeviceAssistantService:
             f"1. You are accessible across any device (phones, tablets, laptops, desktops, web).\n"
             f"2. When the user asks you to remember or save information (e.g. 'Remember my favourite colour is blue', 'Remember my dog is Max'), ALWAYS invoke the save_memory tool.\n"
             f"3. Use the SAVED USER MEMORIES above to answer questions about the user's preferences, background, and facts.\n"
-            f"4. When the user asks to launch an application, open a website, or create a project, always call the appropriate tool.\n"
-            f"5. Speak naturally, directly, and concisely."
+            f"4. When the user asks about current {now.year} events, latest updates, or real-time facts, use web_search.\n"
+            f"5. When the user asks to launch an application, open a website, or create a project, always call the appropriate tool.\n"
+            f"6. Speak naturally, directly, and concisely."
         )
         return instructions
 

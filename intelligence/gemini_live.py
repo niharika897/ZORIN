@@ -195,6 +195,36 @@ class GeminiLive:
                     ),
 
                     # ----------------------------------
+                    # LIVE WEB SEARCH
+                    # ----------------------------------
+
+                    types.FunctionDeclaration(
+                        name="web_search",
+
+                        description=(
+                            "Search the live web for real-time information, current 2026 events, "
+                            "breaking news, facts, scores, weather, or recent developments. "
+                            "Use this tool whenever the user asks about current 2026 information, "
+                            "recent updates, news, or anything beyond your training cutoff."
+                        ),
+
+                        parameters={
+                            "type": "OBJECT",
+
+                            "properties": {
+                                "query": {
+                                    "type": "STRING",
+                                    "description": (
+                                        "The exact search query to look up on the live web."
+                                    )
+                                }
+                            },
+
+                            "required": ["query"]
+                        }
+                    ),
+
+                    # ----------------------------------
                     # SAVE MEMORY TO CENTRAL BRAIN
                     # ----------------------------------
 
@@ -251,10 +281,17 @@ class GeminiLive:
     # ==================================================
 
     def build_system_instruction(self):
+        from datetime import datetime
+        now = datetime.now()
+        current_date_str = now.strftime("%A, %B %d, %Y")
 
         instruction = (
-
-            "You are ZORIN, an intelligent personal AI assistant. "
+            f"You are ZORIN, an intelligent personal AI assistant. "
+            f"You are operating in the present year {now.year}. Today's date is {current_date_str}. "
+            f"You have full access to live {now.year} information via the web_search tool. "
+            f"Whenever the user asks about current {now.year} events, modern facts, current date/year, "
+            f"recent news, or real-time information, use the web_search tool to look up live facts. "
+            f"Never claim your knowledge is cut off in the past; you are equipped with live web search. "
 
             "You are friendly, natural, helpful and conversational. "
 

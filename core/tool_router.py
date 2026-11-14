@@ -39,6 +39,9 @@ class ToolRouter:
                 open_after_create=kwargs.get("open_after_create", True)
             )
 
+        if action == "web_search":
+            return self.web_search(kwargs.get("query", ""))
+
         if action == "save_memory":
             return self.save_memory(
                 content=kwargs.get("content", ""),
@@ -51,6 +54,10 @@ class ToolRouter:
             "success": False,
             "message": f"Unknown action: {action}"
         }
+
+    def web_search(self, query):
+        from intelligence.web_search import search_web
+        return search_web(query)
 
     def save_memory(self, content, category="general", importance=2, is_core=False):
         from memory.memory_manager import MemoryManager
