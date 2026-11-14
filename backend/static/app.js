@@ -1,725 +1,600 @@
-// ZORIN Universal Multi-Device Client Application
-// Cross-device Voice, Text, Memory & Remote Device Control Engine
+/**
+ * ZORIN AI - UNIVERSAL WEB CLIENT (DESKTOP TWIN)
+ * Replicates desktop/modern_ui.py RobotWidget, Cyberpunk styling,
+ * voice conversation, barge-in, and multi-device hub features.
+ */
 
-class ZorinApp {
-  constructor() {
-    this.token = localStorage.getItem('zorin_token') || '';
-    this.currentUser = null;
-    this.devices = [];
-    this.activeTargetDeviceId = null;
-    this.conversationId = 'session_' + Math.random().toString(36).substring(2, 9);
-    this.isListening = false;
-    this.isSpeaking = false;
-    this.recognition = null;
-    this.ws = null;
-    this.synth = window.speechSynthesis;
+// =========================================================
+// APPLICATION STATE
+// =========================================================
+const state = {
+  robotState: 'idle', // 'idle' | 'listening' | 'thinking' | 'speaking'
+  isVoiceActive: false,
+  activeConversationId: null,
+  conversations: [],
+  recognition: null,
+  currentAudioUtterance: null,
+  voicePreference: 'Aoede',
+  deviceFleet: []
+};
 
-    this.initDOMElements();
-    this.initSpeechRecognition();
-    this.initEventListeners();
-    this.initWebSocket();
-    this.bootstrapApp();
-    this.registerServiceWorker();
+// =========================================================
+// HTML5 CANVAS: ROBOT WIDGET (EXACT PORT OF RobotWidget)
+// =========================================================
+class RobotCanvas {
+  constructor(canvasId) {
+    this.canvas = document.getElementById(canvasId);
+    if (!this.canvas) return;
+    this.ctx = this.canvas.getContext('2d');
+    this.t = 0;
+
+    // 65 ambient particles drifting upwards
+    this.particles = Array.from({ length: 65 }, () => ({
+      x: Math.random(),
+      y: Math.random(),
+      size: 1 + Math.random() * 2.2
+    }));
+
+    this.animate = this.animate.bind(this);
+    requestAnimationFrame(this.animate);
   }
 
-  initDOMElements() {
-    this.dom = {
-      aiOrb: document.getElementById('aiOrb'),
-      orbStatus: document.getElementById('orbStatus'),
-      chatStream: document.getElementById('chatStream'),
-      textInput: document.getElementById('textInput'),
-      btnMic: document.getElementById('btnMic'),
-      btnSend: document.getElementById('btnSend'),
-      deviceList: document.getElementById('deviceListContainer'),
-      btnRefreshDevices: document.getElementById('btnRefreshDevices'),
-      btnAccount: document.getElementById('btnAccount'),
-      btnMemories: document.getElementById('btnMemories'),
-      accountModal: document.getElementById('accountModal'),
-      memoryModal: document.getElementById('memoryModal'),
-      btnCloseAccount: document.getElementById('btnCloseAccount'),
-      btnCloseMemory: document.getElementById('btnCloseMemory'),
-      authSectionLoggedOut: document.getElementById('authSectionLoggedOut'),
-      authSectionLoggedIn: document.getElementById('authSectionLoggedIn'),
-      authToggleLink: document.getElementById('authToggleLink'),
-      authToggleText: document.getElementById('authToggleText'),
-      groupDisplayName: document.getElementById('groupDisplayName'),
-      btnSubmitAuth: document.getElementById('btnSubmitAuth'),
-      modalTitle: document.getElementById('modalTitle'),
-      authEmail: document.getElementById('authEmail'),
-      authPassword: document.getElementById('authPassword'),
-      authDisplayName: document.getElementById('authDisplayName'),
-      profileDisplayName: document.getElementById('profileDisplayName'),
-      profileEmail: document.getElementById('profileEmail'),
-      selectVoice: document.getElementById('selectVoice'),
-      btnSavePreferences: document.getElementById('btnSavePreferences'),
-      btnLogout: document.getElementById('btnLogout'),
-      memoryList: document.getElementById('memoryList'),
-      newMemoryInput: document.getElementById('newMemoryInput'),
-      btnAddMemory: document.getElementById('btnAddMemory'),
-      hubStatusText: document.getElementById('hubStatusText')
-    };
-    this.isRegisterMode = false;
+  drawGlow(x, y, radius, colorHex, alpha) {
+    const ctx = this.ctx;
+    const grad = ctx.createRadialGradient(x, y, 0, x, y, radius);
+    grad.addColorStop(0, `rgba(${colorHex}, ${alpha})`);
+    grad.addColorStop(1, `rgba(${colorHex}, 0)`);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
   }
 
-  // -------------------------------------------------------------
-  // SPEECH RECOGNITION (Universal Browser Voice)
-  // -------------------------------------------------------------
-  initSpeechRecognition() {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      this.recognition = new SpeechRecognition();
-      this.recognition.continuous = false;
-      this.recognition.interimResults = false;
-      this.recognition.lang = 'en-US';
-
-      this.recognition.onstart = () => {
-        this.isListening = true;
-        this.dom.btnMic.classList.add('active');
-        this.dom.aiOrb.classList.add('listening');
-        this.dom.orbStatus.textContent = "Listening to your voice...";
-      };
-
-      this.recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        if (transcript.trim()) {
-          this.handleSendMessage(transcript);
-        }
-      };
-
-      this.recognition.onerror = (event) => {
-        console.warn("Speech recognition error:", event.error);
-        this.stopListening();
-        this.dom.orbStatus.textContent = "Could not hear audio clearly. Tap mic to retry.";
-      };
-
-      this.recognition.onend = () => {
-        this.stopListening();
-      };
-    } else {
-      console.warn("Browser SpeechRecognition API not supported. Using keyboard input.");
-    }
+  drawRoundedRect(x, y, w, h, r) {
+    const ctx = this.ctx;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
   }
 
-  toggleListening() {
-    if (!this.recognition) {
-      alert("Voice recognition is not supported in this browser. Please use text input or Chrome/Safari.");
-      return;
+  animate() {
+    this.t++;
+    const ctx = this.ctx;
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+    const cx = w / 2;
+    const cy = h / 2 - 10;
+
+    // Update particles
+    for (const p of this.particles) {
+      p.y -= 0.002;
+      if (p.y < 0) p.y = 1;
     }
 
-    if (this.isListening) {
-      this.recognition.stop();
-    } else {
-      try {
-        this.recognition.start();
-      } catch (e) {
-        console.warn("Recognition start error:", e);
-      }
-    }
-  }
+    // 1. Clear with base background
+    ctx.fillStyle = '#100D22';
+    ctx.fillRect(0, 0, w, h);
 
-  stopListening() {
-    this.isListening = false;
-    this.dom.btnMic.classList.remove('active');
-    this.dom.aiOrb.classList.remove('listening');
-    if (!this.isSpeaking) {
-      this.dom.orbStatus.textContent = "ZORIN is standing by.";
-    }
-  }
-
-  // -------------------------------------------------------------
-  // SPEECH SYNTHESIS (Voice Response)
-  // -------------------------------------------------------------
-  speakText(text) {
-    if (!this.synth) return;
-
-    // Do not speak in browser if web audio is muted or on desktop PC
-    // where the native ZORIN desktop app is already playing high-quality audio
-    const isMobile = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
-    if (!isMobile || localStorage.getItem('zorin_web_muted') === 'true') {
-      return;
+    // 2. Ambient dust particles
+    for (const p of this.particles) {
+      ctx.fillStyle = 'rgba(190, 130, 255, 0.5)';
+      ctx.beginPath();
+      ctx.arc(p.x * w, p.y * h, p.size, 0, Math.PI * 2);
+      ctx.fill();
     }
 
-    // Cancel existing utterance
-    this.synth.cancel();
+    // 3. Central background aura glow
+    this.drawGlow(cx, cy, 190, '120, 50, 255', 0.3);
 
-    // Clean text of markdown asterisks/brackets
-    const cleanText = text.replace(/[*_#`\[\]]/g, '').trim();
-    if (!cleanText) return;
+    // 4. Holographic concentric dashed rings
+    for (let i = 0; i < 3; i++) {
+      ctx.save();
+      ctx.translate(cx, cy);
+      const angle = (this.t * (i % 2 === 0 ? 1 : -1) * Math.PI) / 180;
+      ctx.rotate(angle);
 
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.rate = 1.05;
-    utterance.pitch = 1.0;
+      ctx.strokeStyle = `rgba(150, 110, 255, ${0.5 - i * 0.1})`;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([8, 6]);
 
-    const voices = this.synth.getVoices();
-    const voicePref = this.currentUser?.voice_preference || 'Aoede';
-    const isFemale = voicePref.toLowerCase() === 'aoede' || voicePref.toLowerCase() === 'female';
-
-    const preferredVoice = voices.find(v => {
-      const name = v.name.toLowerCase();
-      return isFemale
-        ? (name.includes('female') || name.includes('zira') || name.includes('samantha') || name.includes('victoria') || name.includes('karen'))
-        : (name.includes('male') || name.includes('david') || name.includes('alex') || name.includes('daniel'));
-    }) || voices[0];
-
-    if (preferredVoice) {
-      utterance.voice = preferredVoice;
+      const r = 125 + i * 17;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r, r * 0.4, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
     }
 
-    utterance.onstart = () => {
-      this.isSpeaking = true;
-      this.dom.aiOrb.classList.add('speaking');
-      this.dom.orbStatus.textContent = "ZORIN is speaking...";
-    };
+    // 5. Floating robot transformation
+    const floating = Math.sin(this.t * 0.045) * 8;
+    ctx.save();
+    ctx.translate(cx, cy + floating);
 
-    utterance.onend = () => {
-      this.isSpeaking = false;
-      this.dom.aiOrb.classList.remove('speaking');
-      this.dom.orbStatus.textContent = "ZORIN is standing by.";
-    };
+    // Robot shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.beginPath();
+    ctx.ellipse(0, 150, 90, 12, 0, 0, Math.PI * 2);
+    ctx.fill();
 
-    utterance.onerror = () => {
-      this.isSpeaking = false;
-      this.dom.aiOrb.classList.remove('speaking');
-      this.dom.orbStatus.textContent = "ZORIN is standing by.";
-    };
+    // Robot body
+    const bodyGrad = ctx.createLinearGradient(-70, 30, 70, 150);
+    bodyGrad.addColorStop(0, '#A855F7');
+    bodyGrad.addColorStop(0.5, '#3948A5');
+    bodyGrad.addColorStop(1, '#111B48');
 
-    this.synth.speak(utterance);
-  }
+    ctx.fillStyle = bodyGrad;
+    ctx.strokeStyle = '#C4B5FD';
+    ctx.lineWidth = 2;
+    this.drawRoundedRect(-72, 35, 144, 115, 30);
+    ctx.fill();
+    ctx.stroke();
 
-  // -------------------------------------------------------------
-  // WEBSOCKET (Real-Time Device Synchronization)
-  // -------------------------------------------------------------
-  initWebSocket() {
-    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const clientId = 'web_' + Math.random().toString(36).substring(2, 9);
-    const wsUrl = `${proto}//${window.location.host}/ws/client/${clientId}`;
+    // Arms
+    ctx.strokeStyle = '#A78BFA';
+    ctx.lineWidth = 9;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-65, 65);
+    ctx.lineTo(-90, 105);
+    ctx.stroke();
 
-    try {
-      this.ws = new WebSocket(wsUrl);
+    ctx.beginPath();
+    ctx.moveTo(65, 65);
+    ctx.lineTo(90, 105);
+    ctx.stroke();
 
-      this.ws.onopen = () => {
-        this.dom.hubStatusText.textContent = "Hub Connected";
-      };
+    // Hands
+    ctx.fillStyle = '#C4B5FD';
+    ctx.beginPath();
+    ctx.arc(-91, 108, 11, 0, Math.PI * 2);
+    ctx.arc(91, 108, 11, 0, Math.PI * 2);
+    ctx.fill();
 
-      this.ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.type === 'device_status_changed') {
-            console.log("Device status push received:", data);
-            this.fetchDevices();
-          }
-        } catch (e) {}
-      };
+    // Chest plate
+    ctx.strokeStyle = '#60A5FA';
+    ctx.lineWidth = 2;
+    ctx.fillStyle = '#10152F';
+    this.drawRoundedRect(-38, 65, 76, 58, 16);
+    ctx.fill();
+    ctx.stroke();
 
-      this.ws.onclose = () => {
-        this.dom.hubStatusText.textContent = "Reconnecting...";
-        setTimeout(() => this.initWebSocket(), 4000);
-      };
-    } catch (e) {
-      console.warn("WebSocket init failed:", e);
-    }
-  }
+    // Chest reactor pulse
+    const pulse = 13 + Math.sin(this.t * 0.12) * 4;
+    this.drawGlow(0, 94, 25, '56, 189, 248', 0.55);
+    ctx.fillStyle = '#67E8F9';
+    ctx.beginPath();
+    ctx.arc(0, 94, pulse / 2, 0, Math.PI * 2);
+    ctx.fill();
 
-  // -------------------------------------------------------------
-  // EVENT LISTENERS
-  // -------------------------------------------------------------
-  initEventListeners() {
-    // Mic button
-    this.dom.btnMic.addEventListener('click', () => this.toggleListening());
-    this.dom.aiOrb.addEventListener('click', () => this.toggleListening());
+    // Neck
+    ctx.fillStyle = '#7770C9';
+    this.drawRoundedRect(-15, 10, 30, 30, 8);
+    ctx.fill();
 
-    // Send button
-    this.dom.btnSend.addEventListener('click', () => {
-      const text = this.dom.textInput.value.trim();
-      if (text) {
-        this.handleSendMessage(text);
-        this.dom.textInput.value = '';
-      }
-    });
+    // Head
+    const headGrad = ctx.createLinearGradient(-70, -130, 70, 10);
+    headGrad.addColorStop(0, '#E9D5FF');
+    headGrad.addColorStop(0.5, '#8057E8');
+    headGrad.addColorStop(1, '#263B86');
 
-    // Enter key
-    this.dom.textInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        const text = this.dom.textInput.value.trim();
-        if (text) {
-          this.handleSendMessage(text);
-          this.dom.textInput.value = '';
-        }
-      }
-    });
+    ctx.fillStyle = headGrad;
+    ctx.strokeStyle = '#C4B5FD';
+    ctx.lineWidth = 3;
+    this.drawRoundedRect(-85, -130, 170, 140, 38);
+    ctx.fill();
+    ctx.stroke();
 
-    // Suggestion chips
-    document.querySelectorAll('.chip').forEach(chip => {
-      chip.addEventListener('click', () => {
-        const prompt = chip.getAttribute('data-prompt');
-        if (prompt) {
-          this.handleSendMessage(prompt);
-        }
-      });
-    });
+    // Face screen
+    ctx.strokeStyle = '#93C5FD';
+    ctx.lineWidth = 2;
+    ctx.fillStyle = '#10152F';
+    this.drawRoundedRect(-68, -110, 136, 100, 26);
+    ctx.fill();
+    ctx.stroke();
 
-    // Quick action buttons in sidebar
-    document.querySelectorAll('.quick-btn[data-action]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const action = btn.getAttribute('data-action');
-        const param = btn.getAttribute('data-param');
-        this.executeQuickAction(action, param);
-      });
-    });
+    // Antenna
+    ctx.strokeStyle = '#C4B5FD';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(0, -130);
+    ctx.lineTo(0, -153);
+    ctx.stroke();
 
-    // Refresh devices
-    this.dom.btnRefreshDevices.addEventListener('click', () => this.fetchDevices());
+    this.drawGlow(0, -160, 20, '236, 72, 153', 0.6);
+    ctx.fillStyle = '#F0ABFC';
+    ctx.beginPath();
+    ctx.arc(0, -160, 7, 0, Math.PI * 2);
+    ctx.fill();
 
-    // Modal controls
-    this.dom.btnAccount.addEventListener('click', () => this.openAccountModal());
-    this.dom.btnCloseAccount.addEventListener('click', () => this.closeAccountModal());
-    this.dom.btnMemories.addEventListener('click', () => this.openMemoryModal());
-    this.dom.btnCloseMemory.addEventListener('click', () => this.closeMemoryModal());
+    // Ears
+    ctx.fillStyle = '#A78BFA';
+    this.drawRoundedRect(-96, -85, 14, 38, 7);
+    ctx.fill();
+    this.drawRoundedRect(82, -85, 14, 38, 7);
+    ctx.fill();
 
-    // Auth toggles
-    this.dom.authToggleLink.addEventListener('click', (e) => {
-      e.preventDefault();
-      this.isRegisterMode = !this.isRegisterMode;
-      this.updateAuthFormUI();
-    });
+    // Eyes
+    const eyeColor = (state.robotState === 'speaking' || state.robotState === 'listening')
+      ? '#67E8F9'
+      : '#F0ABFC';
 
-    this.dom.btnSubmitAuth.addEventListener('click', () => this.submitAuth());
-    this.dom.btnLogout.addEventListener('click', () => this.logout());
-    this.dom.btnSavePreferences.addEventListener('click', () => this.savePreferences());
+    const blink = this.t % 160 < 7;
+    const eyeHeight = blink ? 3 : 19;
 
-    // Memory actions
-    this.dom.btnAddMemory.addEventListener('click', () => this.addMemory());
-    this.dom.newMemoryInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') this.addMemory();
-    });
+    ctx.fillStyle = eyeColor;
+    this.drawRoundedRect(-47, -77, 27, eyeHeight, 8);
+    ctx.fill();
+    this.drawRoundedRect(20, -77, 27, eyeHeight, 8);
+    ctx.fill();
 
-    // Device PIN Pairing
-    const btnSubmitPair = document.getElementById('btnSubmitPair');
-    const inputPairPin = document.getElementById('inputPairPin');
-    const pairStatusMsg = document.getElementById('pairStatusMsg');
-
-    if (btnSubmitPair && inputPairPin) {
-      btnSubmitPair.addEventListener('click', async () => {
-        const pin = inputPairPin.value.trim();
-        if (!pin) return;
-        pairStatusMsg.style.display = 'block';
-        pairStatusMsg.style.color = '#67E8F9';
-        pairStatusMsg.textContent = 'Verifying PIN with central hub...';
-
-        const isAndroid = /Android/i.test(navigator.userAgent);
-        const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-        const devName = isAndroid ? 'Android Smartphone' : (isIOS ? 'Apple iPhone' : 'Mobile Web Client');
-
-        const identity = {
-          device_id: 'phone-' + Math.random().toString(36).substring(2, 10),
-          device_name: devName,
-          operating_system: isAndroid ? 'Android' : (isIOS ? 'iOS' : 'Mobile Web'),
-          client_type: 'mobile',
-          device_type: isAndroid ? 'android_phone' : (isIOS ? 'iphone' : 'mobile'),
-          has_microphone: true,
-          has_speaker: true,
-          capabilities: ['voice_input', 'audio_output', 'shared_memory']
-        };
-
-        try {
-          const resp = await fetch('/api/devices/pair/confirm', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pin_or_token: pin, identity })
-          });
-          const result = await resp.json();
-          if (resp.ok && result.success) {
-            pairStatusMsg.style.color = '#34D399';
-            pairStatusMsg.textContent = '✓ ' + result.message;
-            if (result.auth_token) {
-              this.token = result.auth_token;
-              localStorage.setItem('zorin_token', result.auth_token);
-              await this.fetchCurrentUser();
-              await this.fetchDevices();
-            }
-          } else {
-            pairStatusMsg.style.color = '#F87171';
-            pairStatusMsg.textContent = '✕ ' + (result.detail || result.error || 'Failed to pair device.');
-          }
-        } catch (err) {
-          pairStatusMsg.style.color = '#F87171';
-          pairStatusMsg.textContent = '✕ Network error connecting to hub.';
-        }
-      });
-    }
-  }
-
-  // -------------------------------------------------------------
-  // BOOTSTRAP APP & AUTH
-  // -------------------------------------------------------------
-  async bootstrapApp() {
-    await this.fetchCurrentUser();
-    await this.fetchDevices();
-  }
-
-  async fetchCurrentUser() {
-    try {
-      const headers = this.getAuthHeaders();
-      const res = await fetch('/api/auth/me', { headers });
-      if (res.ok) {
-        const data = await res.json();
-        this.currentUser = data.user;
-        this.renderUserUI();
-      } else {
-        // Fallback to anonymous/demo
-        this.currentUser = null;
-        this.renderUserUI();
-      }
-    } catch (e) {
-      console.warn("User fetch error:", e);
-    }
-  }
-
-  getAuthHeaders() {
-    const headers = { 'Content-Type': 'application/json' };
-    if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`;
-    }
-    return headers;
-  }
-
-  renderUserUI() {
-    if (this.currentUser) {
-      this.dom.authSectionLoggedOut.style.display = 'none';
-      this.dom.authSectionLoggedIn.style.display = 'block';
-      this.dom.profileDisplayName.textContent = this.currentUser.display_name || 'User';
-      this.dom.profileEmail.textContent = this.currentUser.email || '';
-      if (this.currentUser.voice_preference) {
-        this.dom.selectVoice.value = this.currentUser.voice_preference;
-      }
-    } else {
-      this.dom.authSectionLoggedOut.style.display = 'block';
-      this.dom.authSectionLoggedIn.style.display = 'none';
-    }
-  }
-
-  updateAuthFormUI() {
-    if (this.isRegisterMode) {
-      this.dom.modalTitle.textContent = "Create Account";
-      this.dom.groupDisplayName.style.display = 'block';
-      this.dom.btnSubmitAuth.textContent = "Register";
-      this.dom.authToggleText.textContent = "Already have an account?";
-      this.dom.authToggleLink.textContent = "Sign In";
-    } else {
-      this.dom.modalTitle.textContent = "Sign In";
-      this.dom.groupDisplayName.style.display = 'none';
-      this.dom.btnSubmitAuth.textContent = "Sign In";
-      this.dom.authToggleText.textContent = "Need an account?";
-      this.dom.authToggleLink.textContent = "Register";
-    }
-  }
-
-  async submitAuth() {
-    const email = this.dom.authEmail.value.trim();
-    const password = this.dom.authPassword.value.trim();
-    const displayName = this.dom.authDisplayName.value.trim();
-
-    if (!email || !password) {
-      alert("Please enter both email and password.");
-      return;
+    // Mouth
+    let mouthHeight = 5;
+    if (state.robotState === 'speaking') {
+      mouthHeight = 8 + Math.abs(Math.sin(this.t * 0.25)) * 15;
+    } else if (state.robotState === 'listening') {
+      mouthHeight = 9;
     }
 
-    const endpoint = this.isRegisterMode ? '/api/auth/register' : '/api/auth/login';
-    const body = { email, password };
-    if (this.isRegisterMode) body.display_name = displayName;
+    ctx.fillStyle = '#F0ABFC';
+    this.drawRoundedRect(-15, -35, 30, mouthHeight, 6);
+    ctx.fill();
 
-    try {
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        this.token = data.token;
-        localStorage.setItem('zorin_token', this.token);
-        this.currentUser = data.user;
-        this.renderUserUI();
-        this.fetchDevices();
-        this.closeAccountModal();
-      } else {
-        alert(data.detail || "Authentication failed.");
-      }
-    } catch (e) {
-      alert("Connection error: " + e.message);
-    }
-  }
+    ctx.restore();
 
-  logout() {
-    this.token = '';
-    localStorage.removeItem('zorin_token');
-    this.currentUser = null;
-    this.renderUserUI();
-    this.fetchDevices();
-  }
+    // Bottom Labels
+    ctx.fillStyle = '#E9D5FF';
+    ctx.font = 'bold 20px "Segoe UI", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Z O R I N', cx, h - 45);
 
-  async savePreferences() {
-    const voicePref = this.dom.selectVoice.value;
-    try {
-      const headers = this.getAuthHeaders();
-      const res = await fetch('/api/auth/settings', {
-        method: 'PATCH',
-        headers,
-        body: JSON.stringify({ voice_preference: voicePref })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        this.currentUser = data.user;
-        alert("Preferences saved!");
-        this.closeAccountModal();
-      }
-    } catch (e) {
-      alert("Failed to save preferences.");
-    }
-  }
+    ctx.fillStyle = '#A5A0BD';
+    ctx.font = '11px "Segoe UI", sans-serif';
+    ctx.fillText('YOUR PERSONAL AI COMPANION', cx, h - 22);
 
-  // -------------------------------------------------------------
-  // DEVICE ECOSYSTEM MANAGEMENT
-  // -------------------------------------------------------------
-  async fetchDevices() {
-    try {
-      const headers = this.getAuthHeaders();
-      const res = await fetch('/api/devices', { headers });
-      if (res.ok) {
-        const data = await res.json();
-        this.devices = data.devices || [];
-        this.renderDevices();
-      }
-    } catch (e) {
-      console.warn("Failed to fetch devices:", e);
-    }
-  }
-
-  renderDevices() {
-    const container = this.dom.deviceList;
-    if (this.devices.length === 0) {
-      container.innerHTML = `
-        <div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:16px;">
-          No devices registered yet.<br>Run the ZORIN agent on your computer to connect it.
-        </div>
-      `;
-      return;
-    }
-
-    container.innerHTML = this.devices.map(dev => {
-      const isOnline = Boolean(dev.is_online);
-      const isDefault = Boolean(dev.is_default);
-      let osIcon = '💻';
-      const osLower = (dev.operating_system || '').toLowerCase();
-      if (osLower.includes('win')) osIcon = '🪟';
-      else if (osLower.includes('mac') || osLower.includes('darwin')) osIcon = '🍎';
-      else if (osLower.includes('linux')) osIcon = '🐧';
-      else if (osLower.includes('android')) osIcon = '🤖';
-      else if (osLower.includes('ios')) osIcon = '📱';
-
-      return `
-        <div class="device-item ${isDefault ? 'active-target' : ''}" data-device-id="${dev.device_id}">
-          <div class="device-info">
-            <span class="device-icon">${osIcon}</span>
-            <div class="device-names">
-              <h4>${dev.device_name} ${isDefault ? '★' : ''}</h4>
-              <p>${dev.operating_system} • ${dev.client_type}</p>
-            </div>
-          </div>
-          <div>
-            <span class="device-status-pill ${isOnline ? 'online' : 'offline'}">
-              ${isOnline ? '● Online' : 'Offline'}
-            </span>
-          </div>
-        </div>
-      `;
-    }).join('');
-
-    // Click to make default
-    container.querySelectorAll('.device-item').forEach(item => {
-      item.addEventListener('click', async () => {
-        const devId = item.getAttribute('data-device-id');
-        await this.setDefaultDevice(devId);
-      });
-    });
-  }
-
-  async setDefaultDevice(deviceId) {
-    try {
-      const headers = this.getAuthHeaders();
-      const res = await fetch(`/api/devices/${deviceId}/default`, {
-        method: 'POST',
-        headers
-      });
-      if (res.ok) {
-        await this.fetchDevices();
-      }
-    } catch (e) {
-      console.warn("Failed to set default device:", e);
-    }
-  }
-
-  async executeQuickAction(action, param) {
-    let prompt = "";
-    if (action === 'open_app') {
-      prompt = `Open ${param} on my computer`;
-    }
-    this.handleSendMessage(prompt);
-  }
-
-  // -------------------------------------------------------------
-  // CHAT & CONVERSATION
-  // -------------------------------------------------------------
-  async handleSendMessage(text) {
-    text = text.trim();
-    if (!text) return;
-
-    // Append user message to UI
-    this.appendMessage('user', text);
-
-    // Orb to thinking state
-    this.dom.aiOrb.classList.add('listening');
-    this.dom.orbStatus.textContent = "ZORIN is thinking & routing commands...";
-
-    try {
-      const headers = this.getAuthHeaders();
-      const res = await fetch('/api/assistant/chat', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          message: text,
-          conversation_id: this.conversationId,
-          target_device: this.activeTargetDeviceId
-        })
-      });
-
-      const data = await res.json();
-      this.dom.aiOrb.classList.remove('listening');
-
-      if (res.ok && data.success) {
-        // Display tool execution badges if any occurred
-        if (data.tool_results && data.tool_results.length > 0) {
-          data.tool_results.forEach(tr => {
-            const toolMsg = `⚡ Remote Action: [${tr.tool}] on ${tr.result?.target_device_name || 'Device'} (${tr.result?.success ? 'Success' : 'Failed'})`;
-            this.appendMessage('tool-event', toolMsg);
-          });
-        }
-
-        // Append assistant response
-        this.appendMessage('assistant', data.reply);
-
-        // Speak aloud
-        this.speakText(data.reply);
-      } else {
-        this.appendMessage('assistant', data.reply || "Sorry, I encountered an error processing your request.");
-      }
-    } catch (e) {
-      this.dom.aiOrb.classList.remove('listening');
-      this.appendMessage('assistant', "Network connection error. Please ensure the ZORIN server is reachable.");
-    }
-  }
-
-  appendMessage(role, content) {
-    const bubble = document.createElement('div');
-    bubble.className = `message-bubble ${role}`;
-    bubble.textContent = content;
-    this.dom.chatStream.appendChild(bubble);
-    this.dom.chatStream.scrollTop = this.dom.chatStream.scrollHeight;
-  }
-
-  // -------------------------------------------------------------
-  // MEMORY INSPECTOR
-  // -------------------------------------------------------------
-  async openMemoryModal() {
-    this.dom.memoryModal.classList.add('open');
-    await this.fetchMemories();
-  }
-
-  closeMemoryModal() {
-    this.dom.memoryModal.classList.remove('open');
-  }
-
-  async fetchMemories() {
-    try {
-      const headers = this.getAuthHeaders();
-      const res = await fetch('/api/memory', { headers });
-      if (res.ok) {
-        const data = await res.json();
-        this.renderMemories(data.memories || []);
-      }
-    } catch (e) {
-      console.warn("Memory fetch error:", e);
-    }
-  }
-
-  renderMemories(memories) {
-    const list = this.dom.memoryList;
-    if (memories.length === 0) {
-      list.innerHTML = `<div style="font-size:0.85rem;color:var(--text-muted);text-align:center;padding:16px;">No saved memories found. Say "Remember that I like..." or add one below!</div>`;
-      return;
-    }
-
-    list.innerHTML = memories.map(m => `
-      <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border-glass);border-radius:var(--radius-sm);padding:8px 12px;display:flex;align-items:center;justify-content:space-between;">
-        <span style="font-size:0.88rem;">${m.content}</span>
-        <button onclick="window.zorinApp.deleteMemory(${m.id})" style="background:none;border:none;color:var(--accent-red);cursor:pointer;font-size:0.9rem;padding:4px;">✕</button>
-      </div>
-    `).join('');
-  }
-
-  async addMemory() {
-    const text = this.dom.newMemoryInput.value.trim();
-    if (!text) return;
-
-    try {
-      const headers = this.getAuthHeaders();
-      const res = await fetch('/api/memory', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ category: 'user_note', content: text, importance: 2 })
-      });
-      if (res.ok) {
-        this.dom.newMemoryInput.value = '';
-        await this.fetchMemories();
-      }
-    } catch (e) {
-      alert("Failed to add memory.");
-    }
-  }
-
-  async deleteMemory(id) {
-    try {
-      const headers = this.getAuthHeaders();
-      const res = await fetch(`/api/memory/${id}`, { method: 'DELETE', headers });
-      if (res.ok) {
-        await this.fetchMemories();
-      }
-    } catch (e) {
-      alert("Failed to delete memory.");
-    }
-  }
-
-  openAccountModal() {
-    this.dom.accountModal.classList.add('open');
-  }
-
-  closeAccountModal() {
-    this.dom.accountModal.classList.remove('open');
-  }
-
-  // -------------------------------------------------------------
-  // SERVICE WORKER REGISTRATION (PWA)
-  // -------------------------------------------------------------
-  registerServiceWorker() {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/service-worker.js').catch(err => {
-        console.warn("Service worker registration skipped:", err);
-      });
-    }
+    requestAnimationFrame(this.animate);
   }
 }
 
-// Instantiate on DOM load
-window.addEventListener('DOMContentLoaded', () => {
-  window.zorinApp = new ZorinApp();
+// =========================================================
+// UI CONTROLLER & EVENT LISTENERS
+// =========================================================
+document.addEventListener('DOMContentLoaded', () => {
+  // 1. Initialize Robot Canvas
+  const robot = new RobotCanvas('robotCanvas');
+
+  // Elements
+  const btnVoiceToggle = document.getElementById('btnVoiceToggle');
+  const robotStatusTitle = document.getElementById('robotStatusTitle');
+  const robotStatusDesc = document.getElementById('robotStatusDesc');
+  const connectionStatus = document.getElementById('connectionStatus');
+  const chatStream = document.getElementById('chatStream');
+  const textInput = document.getElementById('textInput');
+  const btnSend = document.getElementById('btnSend');
+  const btnStop = document.getElementById('btnStop');
+  const voiceSelect = document.getElementById('voiceSelect');
+  const btnToggleHistory = document.getElementById('btnToggleHistory');
+  const chatsSidebar = document.getElementById('chatsSidebar');
+  const btnNewChat = document.getElementById('btnNewChat');
+  const searchChatsInput = document.getElementById('searchChatsInput');
+  const conversationList = document.getElementById('conversationList');
+
+  // Modals
+  const btnDevices = document.getElementById('btnDevices');
+  const devicesModal = document.getElementById('devicesModal');
+  const btnCloseDevicesModal = document.getElementById('btnCloseDevicesModal');
+  const btnMemories = document.getElementById('btnMemories');
+  const memoriesModal = document.getElementById('memoriesModal');
+  const btnCloseMemoriesModal = document.getElementById('btnCloseMemoriesModal');
+
+  // Voice Preference
+  if (voiceSelect) {
+    voiceSelect.addEventListener('change', (e) => {
+      state.voicePreference = e.target.value;
+    });
+  }
+
+  // Toggle History Sidebar
+  if (btnToggleHistory && chatsSidebar) {
+    btnToggleHistory.addEventListener('click', () => {
+      chatsSidebar.classList.toggle('collapsed');
+    });
+  }
+
+  // Set Visual State
+  function setRobotState(newState) {
+    state.robotState = newState;
+    connectionStatus.textContent = `● ${newState.toUpperCase()}`;
+
+    if (newState === 'listening') {
+      robotStatusTitle.textContent = 'LISTENING...';
+      robotStatusDesc.textContent = 'Speak naturally, ZORIN is listening.';
+      btnVoiceToggle.classList.add('active');
+      btnVoiceToggle.innerHTML = '🛑 STOP VOICE CONVERSATION';
+    } else if (newState === 'thinking') {
+      robotStatusTitle.textContent = 'THINKING...';
+      robotStatusDesc.textContent = 'Consulting Gemini AI central brain...';
+    } else if (newState === 'speaking') {
+      robotStatusTitle.textContent = 'SPEAKING...';
+      robotStatusDesc.textContent = 'ZORIN is responding (interrupt anytime)';
+      btnVoiceToggle.classList.add('active');
+    } else {
+      robotStatusTitle.textContent = 'ZORIN IS READY';
+      robotStatusDesc.textContent = "Say 'Hey Zorin' or click below to start voice.";
+      btnVoiceToggle.classList.remove('active');
+      btnVoiceToggle.innerHTML = '🎙️ START VOICE CONVERSATION';
+    }
+  }
+
+  // Stop All Speech & Generation
+  function stopAll() {
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    if (state.recognition) {
+      try { state.recognition.stop(); } catch (e) {}
+    }
+    setRobotState('idle');
+  }
+
+  if (btnStop) {
+    btnStop.addEventListener('click', stopAll);
+  }
+
+  // Append Message to Stream
+  function appendMessage(role, text) {
+    const bubble = document.createElement('div');
+    bubble.className = `message-bubble ${role}`;
+
+    const author = document.createElement('div');
+    author.className = 'msg-author';
+    author.textContent = role === 'user' ? 'YOU' : 'ZORIN';
+
+    const content = document.createElement('div');
+    content.className = 'msg-content';
+    content.textContent = text;
+
+    const time = document.createElement('div');
+    time.className = 'msg-time';
+    const now = new Date();
+    time.textContent = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+    bubble.appendChild(author);
+    bubble.appendChild(content);
+    bubble.appendChild(time);
+
+    chatStream.appendChild(bubble);
+    chatStream.scrollTop = chatStream.scrollHeight;
+  }
+
+  // Speak Text using SpeechSynthesis (with voice selection)
+  function speakResponse(text) {
+    if (!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    state.currentAudioUtterance = utterance;
+
+    const voices = window.speechSynthesis.getVoices();
+    const isFemale = state.voicePreference === 'Aoede' || state.voicePreference === 'Kore';
+    const chosenVoice = voices.find(v => isFemale ? (v.name.includes('Female') || v.name.includes('Google US English') || v.name.includes('Samantha') || v.name.includes('Zira')) : (v.name.includes('Male') || v.name.includes('David') || v.name.includes('Alex')));
+    if (chosenVoice) utterance.voice = chosenVoice;
+
+    utterance.rate = 1.05;
+    utterance.pitch = isFemale ? 1.1 : 0.95;
+
+    utterance.onstart = () => setRobotState('speaking');
+    utterance.onend = () => {
+      setRobotState('idle');
+      if (state.isVoiceActive) startListening();
+    };
+    utterance.onerror = () => setRobotState('idle');
+
+    window.speechSynthesis.speak(utterance);
+  }
+
+  // Send Prompt to Central Brain
+  async function sendPrompt(promptText) {
+    if (!promptText || !promptText.trim()) return;
+    const text = promptText.trim();
+    appendMessage('user', text);
+    textInput.value = '';
+
+    setRobotState('thinking');
+
+    try {
+      const resp = await fetch('/api/assistant/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: text,
+          conversation_id: state.activeConversationId
+        })
+      });
+
+      if (!resp.ok) {
+        throw new Error(`Server returned ${resp.status}`);
+      }
+
+      const data = await resp.json();
+      const reply = data.response || data.reply || data.text || 'I processed your command.';
+      appendMessage('assistant', reply);
+      speakResponse(reply);
+
+    } catch (err) {
+      console.error('Chat error:', err);
+      const fallback = `I encountered an issue connecting to the brain: ${err.message}`;
+      appendMessage('assistant', fallback);
+      setRobotState('idle');
+    }
+  }
+
+  // Send button click & Enter key
+  if (btnSend) {
+    btnSend.addEventListener('click', () => sendPrompt(textInput.value));
+  }
+  if (textInput) {
+    textInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') sendPrompt(textInput.value);
+    });
+  }
+
+  // Voice Recognition (Web Speech API)
+  function startListening() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert('Your browser does not support Web Speech Recognition. Please use Chrome or Safari.');
+      return;
+    }
+
+    if (state.recognition) {
+      try { state.recognition.abort(); } catch (e) {}
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      setRobotState('listening');
+    };
+
+    recognition.onresult = (e) => {
+      const transcript = e.results[0][0].transcript;
+      if (transcript) {
+        sendPrompt(transcript);
+      }
+    };
+
+    recognition.onerror = (e) => {
+      console.warn('Recognition error:', e);
+      setRobotState('idle');
+    };
+
+    recognition.onend = () => {
+      if (state.robotState === 'listening') {
+        setRobotState('idle');
+      }
+    };
+
+    state.recognition = recognition;
+    recognition.start();
+  }
+
+  // Voice Button Toggle
+  if (btnVoiceToggle) {
+    btnVoiceToggle.addEventListener('click', () => {
+      if (state.robotState === 'listening' || state.robotState === 'speaking') {
+        state.isVoiceActive = false;
+        stopAll();
+      } else {
+        state.isVoiceActive = true;
+        startListening();
+      }
+    });
+  }
+
+  // =======================================================
+  // MODALS: DEVICES & MEMORY
+  // =======================================================
+  if (btnDevices && devicesModal) {
+    btnDevices.addEventListener('click', async () => {
+      devicesModal.classList.add('open');
+      loadDeviceFleet();
+    });
+  }
+  if (btnCloseDevicesModal && devicesModal) {
+    btnCloseDevicesModal.addEventListener('click', () => {
+      devicesModal.classList.remove('open');
+    });
+  }
+
+  if (btnMemories && memoriesModal) {
+    btnMemories.addEventListener('click', () => {
+      memoriesModal.classList.add('open');
+      loadMemories();
+    });
+  }
+  if (btnCloseMemoriesModal && memoriesModal) {
+    btnCloseMemoriesModal.addEventListener('click', () => {
+      memoriesModal.classList.remove('open');
+    });
+  }
+
+  // Modal Tabs
+  const tabBtns = document.querySelectorAll('.tab-btn');
+  tabBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      tabBtns.forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+
+      btn.classList.add('active');
+      const targetPane = document.getElementById(btn.dataset.tab);
+      if (targetPane) targetPane.classList.add('active');
+    });
+  });
+
+  async function loadDeviceFleet() {
+    const grid = document.getElementById('fleetGrid');
+    if (!grid) return;
+    try {
+      const res = await fetch('/api/devices');
+      if (res.ok) {
+        const data = await res.json();
+        const devices = data.devices || [];
+        if (devices.length > 0) {
+          grid.innerHTML = devices.map(d => `
+            <div class="device-card ${d.is_default ? 'active-card' : ''}">
+              <div class="device-card-header">
+                <span class="device-type-badge">${d.device_type === 'laptop' ? '💻' : '📱'} ${d.device_type}</span>
+                <span class="status-online">● ${d.status ? d.status.toUpperCase() : 'ONLINE'}</span>
+              </div>
+              <div class="device-card-name">${d.name || d.device_name || 'Connected Node'}</div>
+              <div class="device-card-sub">${d.ip_address || 'Cloud Hub'} · ${d.is_default ? 'Default Target' : 'Secondary'}</div>
+            </div>
+          `).join('');
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to fetch devices:', e);
+    }
+  }
+
+  async function loadMemories() {
+    const list = document.getElementById('memoryItemsList');
+    if (!list) return;
+    try {
+      const res = await fetch('/api/memory');
+      if (res.ok) {
+        const data = await res.json();
+        const memories = data.memories || [];
+        if (memories.length > 0) {
+          list.innerHTML = memories.map(m => `
+            <div class="memory-item">
+              <span>${m.content || m.fact || m}</span>
+              <span style="color:#A78BFA;font-size:0.75rem;">Persistent</span>
+            </div>
+          `).join('');
+        } else {
+          list.innerHTML = '<div style="color:#8E8AAB;text-align:center;padding:20px;">No facts stored yet. Type one above!</div>';
+        }
+      }
+    } catch (e) {
+      list.innerHTML = '<div style="color:#8E8AAB;text-align:center;padding:20px;">Memory bank accessible on primary host.</div>';
+    }
+  }
+
+  // Pre-load voices
+  if (window.speechSynthesis) {
+    window.speechSynthesis.onvoiceschanged = () => {
+      window.speechSynthesis.getVoices();
+    };
+  }
 });

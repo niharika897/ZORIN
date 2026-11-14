@@ -3,223 +3,221 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#080a12">
+  <meta name="theme-color" content="#090817">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="ZORIN">
+  <meta name="apple-mobile-web-app-title" content="ZORIN AI">
   <link rel="manifest" href="/manifest.json">
-  <title>ZORIN AI - Multi-Device Universal Assistant</title>
+  <title>ZORIN AI - Personal AI Companion</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 
-  <!-- TOP NAVBAR -->
-  <header class="navbar">
-    <div class="brand">
-      <div class="brand-logo">Z</div>
-      <div class="brand-text">
-        <h1>ZORIN</h1>
-      </div>
+  <!-- TOP HEADER -->
+  <header class="header">
+    <div class="header-left">
+      <div class="logo">✦ ZORIN</div>
+      <div class="tagline">YOUR PERSONAL AI UNIVERSE</div>
     </div>
 
-    <div class="nav-actions">
-      <div class="status-badge" id="hubStatusBadge">
-        <span class="status-dot"></span>
-        <span id="hubStatusText">Hub Online</span>
-      </div>
+    <div class="header-right">
+      <button class="badge-btn hub-badge" id="hubBadge" title="Central Cloud Hub">
+        ● Central Hub (Online)
+      </button>
 
-      <button class="icon-btn" id="btnMemories" title="Memory Inspector">🧠</button>
-      <button class="icon-btn" id="btnAccount" title="Account / Profile">👤</button>
+      <button class="nav-btn devices-btn" id="btnDevices" title="Multi-Device Center">
+        📱 DEVICES
+      </button>
+
+      <select class="voice-select" id="voiceSelect" title="Voice Selection">
+        <option value="Puck">👨 Male Voice (Puck)</option>
+        <option value="Aoede" selected>👩 Female Voice (Aoede)</option>
+        <option value="Charon">Charon (Deep)</option>
+        <option value="Kore">Kore (Warm)</option>
+        <option value="Fenrir">Fenrir (Bold)</option>
+      </select>
+
+      <button class="nav-btn memory-btn" id="btnMemories" title="Memory Inspector">
+        🧠 MEMORY
+      </button>
+
+      <button class="icon-toggle-btn" id="btnToggleHistory" title="Toggle Past Chats">
+        ☰
+      </button>
+
+      <div class="connection-status" id="connectionStatus">● IDLE</div>
     </div>
   </header>
 
-  <!-- MAIN APP CONTAINER -->
-  <main class="app-container">
+  <!-- MAIN 2-COLUMN STAGE (ORIGINAL ZORIN DESKTOP LAYOUT) -->
+  <main class="main-layout">
 
-    <!-- LEFT / MAIN STAGE: VOICE & CHAT INTERACTION -->
-    <section class="assistant-stage">
+    <!-- LEFT PANEL: ROBOT ASSISTANT -->
+    <section class="panel robot-panel">
+      <div class="panel-header">
+        <h2 class="panel-title">MEET YOUR ASSISTANT</h2>
+      </div>
+
+      <div class="canvas-container">
+        <canvas id="robotCanvas" width="400" height="460"></canvas>
+      </div>
+
+      <div class="robot-status-bar">
+        <div class="robot-status-title" id="robotStatusTitle">ZORIN IS READY</div>
+        <div class="robot-status-desc" id="robotStatusDesc">Say 'Hey Zorin' or click below to start voice.</div>
+      </div>
+
+      <div class="voice-action-container">
+        <button class="voice-btn" id="btnVoiceToggle">
+          🎙️ START VOICE CONVERSATION
+        </button>
+      </div>
+    </section>
+
+    <!-- RIGHT PANEL: CONVERSATION WITH COLLAPSIBLE SIDEBAR -->
+    <section class="panel conversation-panel">
       
-      <!-- AI ORB VISUALIZER -->
-      <div class="orb-container">
-        <div class="ai-orb-wrapper">
-          <div class="orb-ring ring-1"></div>
-          <div class="orb-ring ring-2"></div>
-          <div class="ai-orb" id="aiOrb" title="Click or tap to talk"></div>
+      <!-- COLLAPSIBLE PAST CHATS SIDEBAR -->
+      <aside class="chats-sidebar" id="chatsSidebar">
+        <div class="sidebar-header">
+          <h3>PAST CHATS</h3>
         </div>
-        <div class="orb-status-text" id="orbStatus">ZORIN is standing by. Say something or tap the mic.</div>
-      </div>
-
-      <!-- SUGGESTION CHIPS -->
-      <div class="suggestion-chips">
-        <div class="chip" data-prompt="Open VS Code on my laptop">💻 Open VS Code</div>
-        <div class="chip" data-prompt="Open Google Chrome on my PC">🌐 Open Chrome</div>
-        <div class="chip" data-prompt="Create a modern portfolio website">🛠️ Create Portfolio Site</div>
-        <div class="chip" data-prompt="What devices are currently connected?">📱 Check Devices</div>
-        <div class="chip" data-prompt="What memories do you have saved about me?">🧠 View Memories</div>
-      </div>
-
-      <!-- REAL-TIME CHAT / TRANSCRIPT -->
-      <div class="chat-stream" id="chatStream">
-        <div class="message-bubble assistant">
-          Hello! I am ZORIN, your multi-device personal assistant. I can open applications, launch websites, generate code, or execute actions on your computer from this device or any phone.
+        <button class="new-chat-btn" id="btnNewChat">+ New Conversation</button>
+        <div class="search-box-wrap">
+          <input type="text" class="search-chats-input" id="searchChatsInput" placeholder="⌕ Search chats...">
         </div>
-      </div>
+        <div class="conversation-list" id="conversationList">
+          <!-- Dynamic conversation items -->
+        </div>
+      </aside>
 
-      <!-- INPUT ACTION BAR -->
-      <div class="action-bar">
-        <button class="mic-btn" id="btnMic" title="Voice Input (Push to talk or toggle)">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-            <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-          </svg>
-        </button>
+      <!-- CHAT MAIN AREA -->
+      <div class="chat-workspace">
+        <div class="chat-top-bar">
+          <span class="active-chat-title" id="activeChatTitle">Current Conversation</span>
+          <div class="chat-top-actions">
+            <button class="btn-sm" id="btnDeleteChat" title="Delete current conversation">🗑️</button>
+          </div>
+        </div>
 
-        <input type="text" class="input-box" id="textInput" placeholder="Ask ZORIN or tell it to control your PC..." autocomplete="off">
+        <!-- MESSAGE STREAM -->
+        <div class="chat-stream" id="chatStream">
+          <div class="message-bubble assistant">
+            <div class="msg-author">ZORIN</div>
+            <div class="msg-content">Hello! I am ZORIN, your personal AI companion. You can talk to me directly using voice, ask questions, or issue commands across your connected devices.</div>
+            <div class="msg-time">Just now</div>
+          </div>
+        </div>
 
-        <button class="send-btn" id="btnSend" title="Send command">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-          </svg>
-        </button>
+        <!-- INPUT ACTION BAR -->
+        <div class="chat-input-bar">
+          <input type="text" class="text-input" id="textInput" placeholder="Ask Zorin something..." autocomplete="off">
+          <button class="btn-send" id="btnSend">Send</button>
+          <button class="btn-stop" id="btnStop" title="Stop generating or speaking">⏹ STOP</button>
+        </div>
       </div>
 
     </section>
 
-    <!-- RIGHT SIDEBAR: DEVICE ECOSYSTEM -->
-    <aside class="sidebar">
-      
-      <!-- CONNECTED DEVICES CARD -->
-      <div class="side-card">
-        <div class="card-header">
-          <h3 class="card-title">💻 Connected Devices</h3>
-          <button class="icon-btn" id="btnRefreshDevices" title="Refresh" style="width:30px;height:30px;font-size:0.8rem;">🔄</button>
-        </div>
-
-        <div class="device-list" id="deviceListContainer">
-          <div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:20px;">
-            Scanning for registered devices...
-          </div>
-        </div>
-
-        <!-- QUICK ACTION CONTROLS -->
-        <div class="quick-actions">
-          <button class="quick-btn" data-action="open_app" data-param="chrome">
-            🌐 Open Chrome
-          </button>
-          <button class="quick-btn" data-action="open_app" data-param="code">
-            💻 Launch VS Code
-          </button>
-          <button class="quick-btn" data-action="open_app" data-param="spotify">
-            🎵 Open Spotify
-          </button>
-          <button class="quick-btn" data-action="open_app" data-param="notepad">
-            📝 Open Notepad
-          </button>
-        </div>
-      </div>
-
-      <!-- DEVICE PAIRING INFO -->
-      <div class="side-card">
-        <div class="card-header">
-          <h3 class="card-title">📱 Connect Other Devices</h3>
-        </div>
-        <p style="font-size:0.8rem;color:var(--text-muted);line-height:1.4;margin-bottom:10px;">
-          Link this phone to your laptop's ZORIN Central Brain:
-        </p>
-
-        <!-- PIN PAIRING FORM -->
-        <div style="background:rgba(0,0,0,0.35);padding:10px;border-radius:8px;border:1px solid rgba(103,232,249,0.2);margin-bottom:12px;">
-          <label style="font-size:0.75rem;color:var(--text-muted);display:block;margin-bottom:6px;">Enter 6-Digit PIN from Desktop Screen:</label>
-          <div style="display:flex;gap:6px;">
-            <input type="text" id="inputPairPin" placeholder="e.g. 482910" style="flex:1;background:#0d111e;border:1px solid #332d56;color:white;border-radius:6px;padding:6px 10px;font-size:0.95rem;text-align:center;letter-spacing:3px;font-family:monospace;">
-            <button id="btnSubmitPair" class="quick-btn" style="padding:6px 14px;border-color:var(--accent-cyan);color:var(--accent-cyan);font-weight:bold;cursor:pointer;">Pair</button>
-          </div>
-          <div id="pairStatusMsg" style="font-size:0.75rem;margin-top:6px;display:none;"></div>
-        </div>
-
-        <ol style="font-size:0.78rem;color:var(--text-main);padding-left:18px;line-height:1.6;">
-          <li>Open this page on your phone (or add to Home Screen).</li>
-          <li>Enter the 6-Digit PIN shown on your Laptop's Device Center.</li>
-          <li>Tap <b>Pair</b> to link this phone with shared memory & voice!</li>
-        </ol>
-      </div>
-
-    </aside>
-
   </main>
 
-  <!-- MODAL: ACCOUNT & SETTINGS -->
-  <div class="modal-overlay" id="accountModal">
-    <div class="modal-card">
+  <!-- MULTI-DEVICE CENTER MODAL -->
+  <div class="modal-backdrop" id="devicesModal">
+    <div class="modal-content modal-lg">
       <div class="modal-header">
-        <h3 id="modalTitle">Account & Profile</h3>
-        <button class="icon-btn" id="btnCloseAccount" style="width:32px;height:32px;">✕</button>
-      </div>
-
-      <div id="authSectionLoggedOut" style="display:none;">
-        <div class="form-group">
-          <label>Email Address</label>
-          <input type="email" id="authEmail" class="form-input" placeholder="name@example.com">
-        </div>
-        <div class="form-group">
-          <label>Password</label>
-          <input type="password" id="authPassword" class="form-input" placeholder="••••••••">
-        </div>
-        <div class="form-group" id="groupDisplayName" style="display:none;">
-          <label>Your Name</label>
-          <input type="text" id="authDisplayName" class="form-input" placeholder="Niharika">
-        </div>
-
-        <button class="btn-primary" id="btnSubmitAuth">Sign In</button>
-        <div style="margin-top:12px;text-align:center;font-size:0.8rem;color:var(--text-muted);">
-          <span id="authToggleText">Need an account?</span>
-          <a href="#" id="authToggleLink" style="color:var(--accent-cyan);text-decoration:none;margin-left:4px;">Register</a>
-        </div>
-      </div>
-
-      <div id="authSectionLoggedIn">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
-          <div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--accent-cyan),var(--accent-purple));display:flex;align-items:center;justify-content:center;font-size:1.4rem;">👤</div>
+        <div class="modal-title-wrap">
+          <div class="modal-icon">📱</div>
           <div>
-            <h4 id="profileDisplayName">Niharika</h4>
-            <p id="profileEmail" style="font-size:0.8rem;color:var(--text-muted);">niharika@zorin.ai</p>
+            <h2>ZORIN MULTI-DEVICE FLEET</h2>
+            <p>Unified Central AI Brain across all your hardware</p>
+          </div>
+        </div>
+        <button class="modal-close-btn" id="btnCloseDevicesModal">✕</button>
+      </div>
+
+      <div class="modal-tabs">
+        <button class="tab-btn active" data-tab="tabFleet">Paired Fleet</button>
+        <button class="tab-btn" data-tab="tabPair">Link Mobile / Phone</button>
+        <button class="tab-btn" data-tab="tabAudio">Audio & Mic Routing</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Tab 1: Paired Fleet -->
+        <div class="tab-pane active" id="tabFleet">
+          <div class="fleet-grid" id="fleetGrid">
+            <div class="device-card active-card">
+              <div class="device-card-header">
+                <span class="device-type-badge">💻 Host PC</span>
+                <span class="status-online">● ONLINE</span>
+              </div>
+              <div class="device-card-name">ZORIN Primary Node</div>
+              <div class="device-card-sub">Central Brain & AI Controller</div>
+            </div>
           </div>
         </div>
 
-        <div class="form-group">
-          <label>Assistant Spoken Voice</label>
-          <select id="selectVoice" class="form-input" style="background:#0f1322;">
-            <option value="Aoede">Aoede (Natural Female)</option>
-            <option value="Puck">Puck (Natural Male)</option>
-          </select>
+        <!-- Tab 2: Pair Mobile -->
+        <div class="tab-pane" id="tabPair">
+          <div class="pair-guide">
+            <div class="qr-pin-box">
+              <div class="pin-display-title">6-DIGIT INSTANT PAIRING PIN</div>
+              <div class="pin-code" id="modalPairPin">482-910</div>
+              <p class="pin-sub">Enter this PIN on your phone browser to securely sync memory and voice.</p>
+            </div>
+            <div class="pair-steps">
+              <h4>How to connect any phone:</h4>
+              <ol>
+                <li>Open this deployment URL in Safari / Chrome on your phone.</li>
+                <li>Tap <b>Share</b> $\rightarrow$ <b>Add to Home Screen</b> to install as an App.</li>
+                <li>Your phone automatically links to this Central Brain!</li>
+              </ol>
+            </div>
+          </div>
         </div>
 
-        <button class="btn-primary" id="btnSavePreferences">Save Preferences</button>
-        <button class="quick-btn" id="btnLogout" style="width:100%;margin-top:10px;padding:10px;border-color:var(--accent-red);color:var(--accent-red);">Sign Out</button>
+        <!-- Tab 3: Audio & Mic Routing -->
+        <div class="tab-pane" id="tabAudio">
+          <div class="audio-routing-pane">
+            <p style="color:#A5A0BD;margin-bottom:12px;">Active audio hardware routes:</p>
+            <div class="hardware-row">
+              <span>Primary Microphone:</span>
+              <span style="color:#67E8F9;font-weight:bold;">Default System Mic (Noise-gated)</span>
+            </div>
+            <div class="hardware-row">
+              <span>Audio Playback:</span>
+              <span style="color:#67E8F9;font-weight:bold;">Stereo Speaker / Bluetooth</span>
+            </div>
+            <div class="hardware-row">
+              <span>Barge-in Threshold:</span>
+              <span style="color:#A855F7;">750 RMS (&lt;100ms real-time cutoff)</span>
+            </div>
+          </div>
+        </div>
       </div>
-
     </div>
   </div>
 
-  <!-- MODAL: MEMORY VIEWER -->
-  <div class="modal-overlay" id="memoryModal">
-    <div class="modal-card" style="max-width:540px;">
+  <!-- MEMORY DASHBOARD MODAL -->
+  <div class="modal-backdrop" id="memoriesModal">
+    <div class="modal-content">
       <div class="modal-header">
-        <h3>🧠 Personal Memories</h3>
-        <button class="icon-btn" id="btnCloseMemory" style="width:32px;height:32px;">✕</button>
+        <div class="modal-title-wrap">
+          <div class="modal-icon">🧠</div>
+          <div>
+            <h2>ZORIN LONG-TERM MEMORY</h2>
+            <p>Persistent facts and learned context</p>
+          </div>
+        </div>
+        <button class="modal-close-btn" id="btnCloseMemoriesModal">✕</button>
       </div>
-
-      <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:14px;">
-        ZORIN automatically remembers your preferences, projects, and personal details across all your devices.
-      </p>
-
-      <div id="memoryList" style="max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
-        <div style="font-size:0.85rem;color:var(--text-muted);text-align:center;padding:20px;">Loading memories...</div>
-      </div>
-
-      <div style="display:flex;gap:8px;">
-        <input type="text" id="newMemoryInput" class="form-input" placeholder="Teach ZORIN a new fact...">
-        <button class="btn-primary" id="btnAddMemory" style="width:auto;margin:0;padding:0 18px;white-space:nowrap;">Remember</button>
+      <div class="modal-body">
+        <div class="memory-input-wrap">
+          <input type="text" id="inputNewMemory" placeholder="Teach ZORIN a new fact about you..." class="text-input">
+          <button id="btnSaveMemory" class="btn-send">Save</button>
+        </div>
+        <div class="memory-items-list" id="memoryItemsList">
+          <div style="color:#8E8AAB;text-align:center;padding:20px;">Loading memory bank...</div>
+        </div>
       </div>
     </div>
   </div>
