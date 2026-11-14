@@ -15,8 +15,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Copy dependency requirements
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements-server.txt requirements.txt ./
+RUN pip install --no-cache-dir -r requirements-server.txt
 
 # Copy backend application source code
 COPY backend/ ./backend/
