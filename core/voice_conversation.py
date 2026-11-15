@@ -443,14 +443,17 @@ class VoiceConversation:
                         print("\nZORIN: Server finished generating audio.")
 
                         # Wait until the speaker has finished playing buffered audio chunks
-                        # before declaring turn complete and returning to LISTENING
+                        # before declaring turn complete and returning to LISTENING (capped at 6s to prevent hang)
                         turn_gen_id = self.current_generation_id
+                        wait_count = 0
                         while (
                             self.speaker.is_playing()
                             and turn_gen_id == self.current_generation_id
                             and not self.stop_sending.is_set()
+                            and wait_count < 120
                         ):
                             await asyncio.sleep(0.05)
+                            wait_count += 1
 
                         if turn_gen_id == self.current_generation_id and not self.stop_sending.is_set():
                             print("\nZORIN FINISHED RESPONDING.")

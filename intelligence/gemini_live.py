@@ -499,7 +499,7 @@ class GeminiLive:
                     "realtime_input_config": {
                         "automatic_activity_detection": {
                             "disabled": False,
-                            "silence_duration_ms": 800
+                            "silence_duration_ms": 500
                         },
                         "activity_handling": types.ActivityHandling.START_OF_ACTIVITY_INTERRUPTS
                     }

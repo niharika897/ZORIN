@@ -413,7 +413,7 @@ document.addEventListener('DOMContentLoaded', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: text,
+          message: text,
           conversation_id: state.activeConversationId
         })
       });

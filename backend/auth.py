@@ -256,3 +256,46 @@ async def get_current_user(
         )
 
     return user
+
+
+async def get_current_user_or_default(
+    authorization: Optional[str] = Header(None),
+    token_param: Optional[str] = Query(None, alias="token")
+) -> dict:
+    """
+    Extracts user from token if present; otherwise seamlessly falls back to default local user.
+    Enables frictionless chat on web and mobile companions without auth failures.
+    """
+    token = None
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization[7:].strip()
+    elif token_param:
+        token = token_param.strip()
+
+    if token:
+        try:
+            payload = decode_token(token)
+            user_id = payload.get("user_id")
+            if user_id:
+                user = get_user_by_id(user_id)
+                if user:
+                    return user
+        except Exception:
+            pass
+
+    try:
+        from memory.database import get_default_user_id
+        default_uid = get_default_user_id()
+        user = get_user_by_id(default_uid)
+        if user:
+            return user
+    except Exception:
+        pass
+
+    return {
+        "user_id": "default-zorin-user",
+        "email": "default@zorin.ai",
+        "display_name": "ZORIN User",
+        "voice_preference": "Aoede"
+    }
+

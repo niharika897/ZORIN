@@ -43,7 +43,7 @@ VOICE_OPTIONS = {
 
 
 def get_voice_preference():
-    """Return the saved Gemini voice name, defaulting to the male voice."""
+    """Return the saved Gemini voice name, defaulting to the female voice (Aoede)."""
     import json
 
     try:
@@ -57,7 +57,7 @@ def get_voice_preference():
     except (OSError, ValueError, TypeError):
         pass
 
-    return VOICE_OPTIONS["male"]
+    return VOICE_OPTIONS["female"]
 
 
 def set_voice_preference(voice):

@@ -467,16 +467,18 @@ class ZorinController(QObject):
     # -----------------------------------------------------
 
     def refresh_connected_devices(self):
-        try:
-            from backend.client import register_current_device
-            register_current_device()
-            devices = get_all_devices()
-            self.window.update_device_badge(devices, server_online=True)
-            if self.window.device_dashboard is not None and self.window.device_dashboard.isVisible():
-                self.window.device_dashboard.refresh_all()
-        except Exception as e:
-            print("Device refresh error:", e)
-            self.window.update_device_badge([], server_online=False)
+        def _bg_refresh():
+            try:
+                from backend.client import register_current_device
+                register_current_device()
+                devices = get_all_devices()
+                QTimer.singleShot(0, lambda: self.window.update_device_badge(devices, server_online=True))
+                if self.window.device_dashboard is not None and self.window.device_dashboard.isVisible():
+                    QTimer.singleShot(0, self.window.device_dashboard.refresh_all)
+            except Exception as e:
+                QTimer.singleShot(0, lambda: self.window.update_device_badge([], server_online=False))
+
+        threading.Thread(target=_bg_refresh, daemon=True, name="zorin-device-poll").start()
 
     # -----------------------------------------------------
     # START / STOP

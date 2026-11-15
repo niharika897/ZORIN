@@ -279,14 +279,11 @@ def register_current_device(user_token: Optional[str] = None):
     )
 
     try:
-        with urlopen(request, timeout=10) as response:
+        with urlopen(request, timeout=1.5) as response:
             result = json.loads(response.read().decode("utf-8"))
-            print("ZORIN DEVICE REGISTRATION:", result)
             return result
     except HTTPError as error:
         details = error.read().decode("utf-8", errors="replace")
-        print("DEVICE REGISTRATION ERROR:", error.code, details)
         return {"success": False, "error": details}
     except (URLError, TimeoutError, OSError) as error:
-        print("DEVICE CONNECTION ERROR:", str(error))
         return {"success": False, "error": str(error)}

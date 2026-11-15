@@ -799,3 +799,141 @@ body {
     box-shadow: 4px 0 20px rgba(0,0,0,0.5);
   }
 }
+/* ==========================================
+   ZORIN AUTHENTICATION SCREEN
+========================================== */
+
+#zorinAuthOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(9, 8, 23, 0.97);
+    backdrop-filter: blur(15px);
+}
+
+.zorin-auth-card {
+    width: 100%;
+    max-width: 420px;
+    padding: 40px 32px;
+    border: 1px solid var(--border-panel);
+    border-radius: 20px;
+    background: var(--bg-panel);
+    box-shadow: 0 0 45px rgba(192, 132, 252, 0.13);
+    text-align: center;
+}
+
+.zorin-auth-logo {
+    color: var(--accent-purple);
+    font-size: 25px;
+    font-weight: 800;
+    letter-spacing: 5px;
+    margin-bottom: 28px;
+}
+
+.zorin-auth-card h1 {
+    color: var(--text-main);
+    font-size: 27px;
+    margin-bottom: 10px;
+}
+
+.zorin-auth-card > p {
+    color: var(--text-muted);
+    font-size: 14px;
+    margin-bottom: 28px;
+}
+
+.auth-field {
+    text-align: left;
+    margin-bottom: 19px;
+}
+
+.auth-field[hidden] {
+    display: none !important;
+}
+
+.auth-field label {
+    display: block;
+    color: var(--accent-purple-title);
+    font-size: 13px;
+    margin-bottom: 8px;
+}
+
+.auth-field input {
+    width: 100%;
+    padding: 13px 14px;
+    border: 1px solid var(--border-soft);
+    border-radius: 9px;
+    outline: none;
+    background: var(--bg-panel-dark);
+    color: var(--text-main);
+    font-size: 14px;
+    box-sizing: border-box;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.auth-field input:focus {
+    border-color: var(--accent-purple);
+    box-shadow: 0 0 12px rgba(192, 132, 252, 0.15);
+}
+
+#authSubmit {
+    width: 100%;
+    padding: 14px;
+    margin-top: 8px;
+    border: none;
+    border-radius: 9px;
+    background: linear-gradient(135deg, #9333EA, #C084FC);
+    color: white;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.2s;
+}
+
+#authSubmit:hover {
+    transform: translateY(-2px);
+}
+
+#authSubmit:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+#authError {
+    min-height: 18px;
+    margin: 8px 0;
+    color: #F87171;
+    font-size: 13px;
+}
+
+.auth-switch {
+    margin-top: 24px;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+#authSwitchButton {
+    border: none;
+    background: transparent;
+    color: var(--accent-cyan);
+    font-weight: 700;
+    cursor: pointer;
+    margin-left: 5px;
+}
+
+.auth-footer {
+    margin-top: 30px;
+    color: var(--text-dim);
+    font-size: 11px;
+    letter-spacing: 2px;
+}
+
+@media (max-width: 480px) {
+    .zorin-auth-card {
+        padding: 30px 22px;
+    }
+}

@@ -16,6 +16,7 @@ from backend.auth import (
     register_user,
     authenticate_user,
     get_current_user,
+    get_current_user_or_default,
     decode_token,
     get_user_by_id,
     get_user_by_email,
@@ -89,7 +90,8 @@ class CommandDispatchRequest(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    message: str
+    message: Optional[str] = None
+    prompt: Optional[str] = None
     conversation_id: Optional[str] = None
     target_device: Optional[str] = None
 
@@ -225,7 +227,7 @@ async def list_memories(
     query: Optional[str] = None,
     core_only: bool = False,
     limit: int = 500,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user_or_default)
 ):
     uid = current_user["user_id"]
     if core_only:
@@ -245,7 +247,7 @@ async def list_memories(
 @app.post("/api/memory")
 async def add_memory(
     req: MemoryCreateRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user_or_default)
 ):
     try:
         result = central_memory_service.save_memory(
@@ -415,7 +417,7 @@ async def delete_conversation_endpoint(
 @app.post("/api/devices/register")
 async def register_new_device(
     device: DeviceRegistration,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user_or_default)
 ):
     try:
         result = register_device(
@@ -433,7 +435,7 @@ async def register_new_device(
 
 @app.get("/devices")
 @app.get("/api/devices")
-async def list_devices(current_user: dict = Depends(get_current_user)):
+async def list_devices(current_user: dict = Depends(get_current_user_or_default)):
     devices = get_user_devices(current_user["user_id"])
     return {
         "success": True,
@@ -556,9 +558,10 @@ async def get_nearby_devices_endpoint(current_user: dict = Depends(get_current_u
 @app.post("/api/assistant/chat")
 async def assistant_chat(
     req: ChatRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user_or_default)
 ):
-    if not req.message or not req.message.strip():
+    msg = (req.message or req.prompt or "").strip()
+    if not msg:
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
 
     conv_id = req.conversation_id or f"session_{current_user['user_id'][:8]}"
@@ -566,7 +569,7 @@ async def assistant_chat(
     res = await assistant_service.chat(
         user_id=current_user["user_id"],
         user_profile=current_user,
-        message=req.message.strip(),
+        message=msg,
         conversation_id=conv_id,
         origin_device_id=req.target_device
     )
