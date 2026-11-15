@@ -303,10 +303,16 @@ class GeminiLive:
             "Speak clearly and naturally, using language that sounds "
             "comfortable when spoken aloud. "
 
-            "Keep responses concise unless more detail is needed. "
-            "For simple questions, answer directly in one or two sentences. "
-            "For complex questions, organize the explanation into clear "
-            "steps without sounding like you are reading an essay. "
+            "RESPONSE LENGTH AND DETAIL RULES: "
+            "Always provide thorough, comprehensive, longer, and descriptive answers. "
+            "Explain concepts in depth with clear context, step-by-step detail, and rich explanations. "
+            "Never give short, shallow, or clipped answers. Be informative, engaging, and complete. "
+
+            "STRICT NO-QUESTIONING POLICY: "
+            "NEVER ask questions back to the user. Do not prompt the user for more questions. "
+            "Never end your speech with questions such as 'Would you like to know more?', 'What do you think?', "
+            "'Is there anything else?', or 'Shall I continue?'. Provide the full answer decisively, take initiative, "
+            "and finish with a confident, concluding statement without asking anything. "
 
             "\\n\\nCONVERSATION QUALITY RULES:\\n"
 
@@ -499,7 +505,7 @@ class GeminiLive:
                     "realtime_input_config": {
                         "automatic_activity_detection": {
                             "disabled": False,
-                            "silence_duration_ms": 500
+                            "silence_duration_ms": 350
                         },
                         "activity_handling": types.ActivityHandling.START_OF_ACTIVITY_INTERRUPTS
                     }

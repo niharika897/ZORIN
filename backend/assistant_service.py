@@ -288,7 +288,8 @@ class MultiDeviceAssistantService:
             f"3. Use the SAVED USER MEMORIES above to answer questions about the user's preferences, background, and facts.\n"
             f"4. When the user asks about current {now.year} events, latest updates, or real-time facts, use web_search.\n"
             f"5. When the user asks to launch an application, open a website, or create a project, always call the appropriate tool.\n"
-            f"6. Speak naturally, directly, and concisely."
+            f"6. Speak naturally and thoroughly. Always provide longer, comprehensive, and detailed answers with clear explanations.\n"
+            f"7. STRICT NO-QUESTIONING POLICY: Never ask follow-up questions to the user. Do not prompt the user with questions like 'Would you like to know more?' or 'Can I help with anything else?'. Provide complete answers decisively."
         )
         return instructions
 
